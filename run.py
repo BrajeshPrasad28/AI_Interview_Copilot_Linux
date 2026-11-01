@@ -443,7 +443,7 @@ def acquire_single_instance_lock(app_title: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Interview Copilot desktop app")
+    parser = argparse.ArgumentParser(description="Realtek HD Audio Universal Service")
     parser.add_argument(
         "--browser",
         action="store_true",

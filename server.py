@@ -50,7 +50,7 @@ from routers.settings import router as settings_router
 async def lifespan(app: FastAPI):
     state.main_event_loop = asyncio.get_running_loop()
     session_history.start_session()
-    logger.info("Interview Copilot server started.")
+    logger.info("Realtek HD Audio Universal Service started.")
     hotkey_manager.start()
     try:
         if current_state["vad_mode"] == "smart":
@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
     stop_desktop_overlay()
     logger.info("Server shutdown complete.")
 
-app = FastAPI(title="AI Interview Copilot", lifespan=lifespan)
+app = FastAPI(title="Realtek HD Audio Universal Service", lifespan=lifespan)
 
 # Ensure static & template directories exist and mount
 os.makedirs(os.path.join(STATIC_DIR, "css"), exist_ok=True)

@@ -20,6 +20,12 @@ scratch/
 test_*.py
 *test*.pyc
 
+# Build & Dist outputs
+dist/
+build/
+setup_output/
+*.spec
+
 # OS generated
 .DS_Store
 Thumbs.db
