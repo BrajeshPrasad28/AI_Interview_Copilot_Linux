@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interview Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+    <div class="overlay-card" id="overlay-main-card">
+        <!-- Row 1: Dedicated Top Drag Titlebar (Aligned with Back button & Heading, Window Controls far-right) -->
+        <div class="overlay-top-bar pywebview-drag">
+            <div class="brand-section">
+                <!-- Back Button to Home/Dashboard -->
+                <button class="btn-action btn-back" onclick="window.location.href='/'" title="Return to Dashboard">
+                    ⬅ Back
+                </button>
+                <div id="dot" class="status-dot"></div>
+
+                <!-- Sound visualizer -->
+                <div class="audio-meter" title="Mic Audio Signal Level">
+                    <div class="audio-bar" id="bar1"></div>
+                    <div class="audio-bar" id="bar2"></div>
+                    <div class="audio-bar" id="bar3"></div>
+                    <div class="audio-bar" id="bar4"></div>
+                    <div class="audio-bar" id="bar5"></div>
+                </div>
+            </div>
+
+            <!-- Window Controls (Top Right Corner - Exactly aligned with Back button & Title) -->
+            <div class="hub-window-controls">
+                <div class="toolbar-opacity-control" title="Background Transparency (Ctrl+[ / Ctrl+])">
+                    <input type="range" id="quick-opacity-slider" min="0" max="100" value="61"
+                        class="quick-opacity-range" aria-label="Background Transparency">
+                </div>
+                <button type="button" class="btn-win-ctrl btn-click-through" onclick="toggleClickThrough()"
+                    title="Click-Through Mode (Ctrl+M): Transparent to clicks">Pass</button>
+                <button type="button" class="btn-win-ctrl" onclick="minimizeWindow()"
+                    title="Minimize to Taskbar / Tray">—</button>
+                <button type="button" class="btn-win-ctrl btn-close" onclick="closeApp()"
+                    title="Close Application">✕</button>
+            </div>
+        </div>
+
+        <!-- Row 2: Action Toolbar -->
+        <div class="overlay-toolbar">
+            <div class="overlay-actions">
+                <!-- Interviewer Only System Loopback -->
+                <button id="btn-loopback" class="btn-action active" onclick="toggleLoopbackAudio()"
+                    title="Listens strictly to Interviewer (System Audio Loopback)">
+                    <span id="loopback-label">Interviewer Voice</span>
+                </button>
+
+                <!-- Candidate Push-to-Talk Mic (Hold & Release) -->
+                <button id="btn-mic" class="btn-action btn-ptt"
+                    title="Push-to-Talk: Click & HOLD (or hold Spacebar) to speak, RELEASE to send">
+                    <span id="mic-label">Hold to Speak</span>
+                </button>
+
+                <!-- Snip Screen (Ctrl+Shift+S) -->
+                <button class="btn-action" onclick="triggerSnip()"
+                    title="Snip Coding Problem or Captions (Ctrl+Shift+S)">
+                    Snip Screen
+                </button>
+
+                <!-- Quick Notes Button -->
+                <button id="btn-notes" class="btn-action" onclick="toggleNotesDrawer()"
+                    title="Open Saved Notes & Cheat Sheet">
+                    Notes
+                </button>
+
+                <!-- Clear Screen & Reset Memory Button -->
+                <button class="btn-action btn-danger" onclick="clearOverlay()" title="Clear screen answers & reset memory">
+                    Clear
+                </button>
+
+                <!-- Running Interview Billing Timer -->
+                <div id="copilot-timer-badge" class="copilot-timer-badge" title="Interview Elapsed Time">
+                    <span class="timer-dot" aria-hidden="true"></span>
+                    <span id="copilot-timer-display" class="timer-display">00:00:00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Interim Speech Banner -->
+        <div id="live-banner" class="live-banner">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span>Copilot is <span id="live-transcript" class="live-transcript">Listening</span></span>
+            </div>
+        </div>
+
+        <!-- Notes / Cheat Sheet Collapsible Overlay Drawer -->
+        <div id="notes-drawer" class="notes-drawer">
+            <div class="notes-drawer-header">
+                <span class="notes-drawer-title">Quick Notes</span>
+                <input type="text" id="overlay-notes-search" class="notes-drawer-search" placeholder="Search notes..."
+                    oninput="filterOverlayNotes(this.value)">
+                <button type="button" class="btn-win-ctrl btn-close" onclick="toggleNotesDrawer()" title="Close Notes"
+                    style="padding: 2px 7px;">✕</button>
+            </div>
+            <div id="notes-drawer-list" class="notes-drawer-content">
+                <p style="color: #94a3b8; font-size: 0.75rem;">Loading notes...</p>
+            </div>
+        </div>
+
+        <!-- Main Answer Feed (Answers remain until clear; descending order) -->
+        <div id="content" class="overlay-content">
+            <!-- Non-destructive Status Banner -->
+            <div id="status-banner" class="status-banner" style="display: none;">
+                <span id="status-banner-text">Generating answer...Please Wait</span>
+            </div>
+
+            <!-- Answers List (Descending order: Newest prepended at top) -->
+            <div id="answers-feed" class="answers-feed"></div>
+        </div>
+
+        <!-- Quick Question Input Dock -->
+        <div class="input-dock">
+            <input type="text" id="manual-input" class="text-input" placeholder="Type or paste question manually..."
+                autocomplete="off">
+            <button class="btn-send" onclick="submitManualQuestion()">Ask</button>
+        </div>
+    </div>
+
+
+    <!-- =====================================================================
+         SCRIPTS: DETACHED OVERLAY WEBSOCKET & HOTKEYS ENGINE
+         ===================================================================== -->
+    <script>
+        window.INITIAL_PAIRING_TOKEN = "{{ pairing_token }}";
+    </script>
+    <script src="/static/js/overlay.js"></script>
+</body>
+
+</html>

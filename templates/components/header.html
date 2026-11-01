@@ -1,0 +1,23 @@
+            <div class="hub-header pywebview-drag">
+                <div class="hub-brand">
+                    <span class="hub-brand-title">AI Interview Copilot</span>
+                    <button type="button" class="hub-credit-badge" onclick="openCreditsView()"
+                        title="Click to view Credit & History">
+                        <span class="credit-badge-dot"></span>
+                        <span id="header-credit-points">100</span>
+                        <span class="credit-badge-suffix">Credits</span>
+                    </button>
+                </div>
+                <div class="hub-window-controls">
+                    <div class="toolbar-opacity-control" title="Background Transparency (Ctrl+[ / Ctrl+])">
+                        <input type="range" id="hub-opacity-slider" min="0" max="100" value="61"
+                            class="quick-opacity-range" aria-label="Background Transparency">
+                    </div>
+                    <button type="button" class="btn-win-ctrl btn-click-through" onclick="toggleClickThrough()"
+                        title="Click-Through Mode (Ctrl+M): Transparent to clicks">Pass</button>
+                    <button type="button" class="btn-win-ctrl" onclick="minimizeWindow()"
+                        title="Minimize to Taskbar / Tray">—</button>
+                    <button type="button" class="btn-win-ctrl btn-close" onclick="closeApp()"
+                        title="Close Application">✕</button>
+                </div>
+            </div>

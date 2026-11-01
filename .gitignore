@@ -1,0 +1,25 @@
+.venv/
+venv/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables & secrets
+.env
+.env.local
+*.log
+
+# IDE & Editor files
+.vscode/
+.idea/
+
+# Testing & Scratch
+scratch/
+test_*.py
+*test*.pyc
+
+# OS generated
+.DS_Store
+Thumbs.db

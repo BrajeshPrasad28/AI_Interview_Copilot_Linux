@@ -1,0 +1,68 @@
+                <section id="customize-settings-view" class="profile-settings-view customize-settings-view"
+                    aria-labelledby="customize-settings-title">
+                    <div class="profile-settings-panel">
+                        <div class="profile-settings-header">
+                            <h2 id="customize-settings-title">Customize</h2>
+                        </div>
+                        <section class="profile-settings-section">
+                            <h3>AI Behavior</h3>
+                            <div class="profile-setting">
+                                <label for="custom-instructions">
+                                    <span>Custom AI Instructions</span>
+                                    <span id="custom-instructions-counter" class="char-counter">0 / 100</span>
+                                </label>
+                                <textarea id="custom-instructions" maxlength="100"
+                                    placeholder="Add preferences for response tone, concise answers, or tech stack focus (0-100 chars)."></textarea>
+                                <small>Added to the model context (Maximum 100 characters allowed).</small>
+                            </div>
+                        </section>
+                        <section class="profile-settings-section">
+                            <h3>Interface Layout</h3>
+                            <div class="profile-setting"><label for="background-opacity">Background Transparency <output
+                                        id="background-opacity-value">61%</output></label><input id="background-opacity"
+                                    type="range" min="0" max="100" value="61"
+                                    aria-valuetext="61% opaque"><small>Transparent&nbsp;&nbsp;&nbsp;Opaque</small></div>
+                            <div class="profile-setting"><label for="font-opacity">Font Transparency <output
+                                        id="font-opacity-value">100%</output></label><input id="font-opacity"
+                                    type="range" min="10" max="100" value="100"><small>Transparent&nbsp;&nbsp;&nbsp;
+                                    Opaque</small></div>
+                            <div class="profile-setting"><label for="response-font-size">Response Font Size <output
+                                        id="response-font-size-value">15 px</output></label><input
+                                    id="response-font-size" type="range" min="12" max="32" value="15"><small>12
+                                    px&nbsp;&nbsp;&nbsp; 32 px</small></div>
+                        </section>
+                        <section class="profile-settings-section">
+                            <h3>Screen Capture Settings</h3>
+                            <div class="profile-setting"><label for="show-screen-capture-button"><span>Show Analyze
+                                        Screen button</span><input id="show-screen-capture-button" type="checkbox"
+                                        checked></label></div>
+                            <div class="profile-setting"><label for="screen-quality">Image Quality</label><select
+                                        id="screen-quality">
+                                    <option value="90">High Quality</option>
+                                    <option value="75">Medium Quality</option>
+                                    <option value="50">Low Quality</option>
+                                </select></div>
+                        </section>
+                        <section class="profile-settings-section">
+                            <h3>Audio</h3>
+                            <div class="profile-setting"><label for="neural-vad-enabled"><span>Enable Neural Voice
+                                        Activity Detection</span><input id="neural-vad-enabled" type="checkbox"
+                                        checked></label><small>When disabled, the RMS fallback detector remains
+                                    active.</small></div>
+                            <div class="profile-setting"><label for="vad-mode">VAD Control Mode</label><select
+                                    id="vad-mode">
+                                    <option value="smart">Smart Detection (Auto)</option>
+                                    <option value="manual">Manual (hold Loopback to listen)</option>
+                                </select></div>
+                        </section>
+                        <section class="profile-settings-section">
+                            <h3>Google Search</h3>
+                            <div class="profile-setting"><label for="google-search-enabled"><span>Enable Google Search
+                                        grounding</span><input id="google-search-enabled"
+                                        type="checkbox"></label><small>Requires a configured Gemini API key.</small>
+                            </div>
+                        </section>
+                        <p id="profile-settings-status" class="profile-settings-note" aria-live="polite">Settings save
+                            automatically as you change them.</p>
+                    </div>
+                </section>

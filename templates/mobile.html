@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Interview Copilot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/mobile.css">
+</head>
+
+<body>
+
+    <!-- Stealth Blackout Screen (tap anywhere to reveal) -->
+    <div id="blackout-screen" class="blackout-screen" title="Tap to wake screen"></div>
+
+    <!-- Toast Notification -->
+    <div id="toast-notification" class="toast-notification" aria-live="polite"></div>
+
+    <!-- App Header -->
+    <header class="app-header">
+        <div class="brand">
+            <div id="connection-badge" class="brand-dot" title="Connecting..."></div>
+            <span class="brand-title">Copilot</span>
+            <!-- Mobile Credits Points Chip Badge -->
+            <button type="button" id="header-credit-badge" class="mobile-credits-chip" onclick="openCreditsModal()"
+                title="Available Credit Points">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                    stroke-linecap="round" stroke-linejoin="round" style="color: #fbbf24;">
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <path d="M14.8 9A2 2 0 0 0 13 8h-2a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4h-2a2 2 0 0 1-1.8-1"></path>
+                    <path d="M12 6v2m0 8v2"></path>
+                </svg>
+                <span id="mobile-credit-points">0</span>
+            </button>
+        </div>
+        <div class="header-actions">
+            <!-- Text Size Controls -->
+            <div class="font-scale-group">
+                <button type="button" class="btn-scale" onclick="adjustFontSize(-1)" title="Smaller Text">A-</button>
+                <button type="button" class="btn-scale" onclick="adjustFontSize(1)" title="Larger Text">A+</button>
+            </div>
+            <!-- Stealth Blackout Toggle -->
+            <button type="button" class="btn-icon" onclick="toggleBlackout()"
+                title="Stealth Blackout (Tap to dim screen)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
+                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
+                    <line x1="2" y1="2" x2="22" y2="22"></line>
+                </svg>
+            </button>
+            <!-- Settings Modal Button -->
+            <button type="button" class="btn-icon" onclick="openSettings()" title="Settings &amp; Profile">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                    </path>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Action Toolbar (With Session Control, Listen, Snip, Notes, Clear & Running Interview Billing Timer) -->
+    <div class="action-strip">
+        <!-- Primary Session Control (Start Copilot / End Session) -->
+        <button type="button" id="btn-session" class="action-btn btn-session btn-session-start" onclick="toggleCopilotSession()"
+            title="Start or End Copilot Interview Session">
+            <span class="btn-session-icon" id="session-icon">▶</span>
+            <span id="session-label">Start Copilot</span>
+        </button>
+
+        <button type="button" id="btn-listen" class="action-btn btn-listen" title="Toggle Live Mic Listening">
+            <span class="btn-dot"></span>
+            <span id="listen-label">Live Listen</span>
+        </button>
+
+        <button type="button" id="btn-snip" class="action-btn btn-snip" title="Snip PC Screen">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+            <span>Snip</span>
+        </button>
+
+        <button type="button" id="btn-notes" class="action-btn" onclick="openNotesModal()"
+            title="Open Saved Notes &amp; Cheat Sheet">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <span>Notes</span>
+        </button>
+
+        <!-- Clear Screen / Memory Button -->
+        <button type="button" id="btn-clear" class="action-btn btn-danger" onclick="triggerPanic()"
+            title="Clear Screen &amp; Memory">
+            Clear
+        </button>
+
+        <!-- Running Interview Billing Timer (At Extreme Right Corner Beside Clear Button) -->
+        <div id="copilot-timer-badge" class="copilot-timer-badge" title="Interview Elapsed Time">
+            <span class="timer-dot" aria-hidden="true"></span>
+            <span id="copilot-timer-display" class="timer-display">00:00:00</span>
+        </div>
+    </div>
+
+    <!-- Hidden Photo Upload input -->
+    <input type="file" id="photo-input" accept="image/*" capture="environment" style="display: none;"
+        onchange="handlePhotoUpload(this)">
+
+    <!-- Main Content Container -->
+    <main class="content-container">
+
+        <!-- Live Speech Recognition Card -->
+        <div id="transcript-card" class="transcript-card">
+            <div class="transcript-header">
+                <span class="transcript-label">
+                    <div class="live-wave">
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                    </div>
+                    Interviewer Question
+                </span>
+                <button type="button" class="btn-close-chip"
+                    onclick="document.getElementById('transcript-card').classList.remove('visible')">✕</button>
+            </div>
+            <div id="transcript-text" class="transcript-text">Listening to audio...</div>
+        </div>
+
+        <!-- Thinking Indicator -->
+        <div id="thinking-box" class="thinking-box">
+            <div class="spinner"></div>
+            <span id="thinking-label" class="thinking-text">Generating natural spoken answer...</span>
+        </div>
+
+        <!-- Answers Feed -->
+        <div id="answers-feed" class="answers-feed">
+            <div id="empty-state" class="empty-state">
+                <div class="empty-title">Ready for Interview</div>
+                <div class="empty-subtitle">Solutions stream here live as questions are asked.</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Input Dock -->
+    <footer class="input-dock">
+        <button type="button" class="btn-dock-icon" onclick="document.getElementById('photo-input').click()"
+            title="Upload Photo of Problem">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+        </button>
+        <input type="text" id="input-prompt" class="input-box" placeholder="Ask question manually..."
+            autocomplete="off">
+        <button type="button" id="btn-send" class="btn-send" title="Send Question">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+        </button>
+    </footer>
+
+    <!-- Credit & History Modal -->
+    <div id="credits-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9"></circle>
+                        <path d="M14.8 9A2 2 0 0 0 13 8h-2a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4h-2a2 2 0 0 1-1.8-1"></path>
+                        <path d="M12 6v2m0 8v2"></path>
+                    </svg>
+                    <h3 style="font-size: 1rem; font-weight: 700; color: #fff;">Credit &amp; History</h3>
+                </div>
+                <button type="button" class="btn-icon" onclick="closeCreditsModal()">✕</button>
+            </div>
+
+            <!-- Available Credits & Redeem Code Card -->
+            <div class="credits-unified-card-mobile">
+                <div class="credits-balance-col-mobile">
+                    <span class="credit-balance-label-mobile">Available Credit Points</span>
+                    <div class="credit-balance-val-mobile" id="modal-credit-balance-val">0</div>
+                    <span class="credit-balance-account-mobile" id="modal-credit-user-email">Saved on this device</span>
+                </div>
+                <div class="credits-redeem-col-mobile">
+                    <label class="credit-redeem-label-mobile" for="mobile-credit-code-input">Enter your credit code</label>
+                    <div class="credit-input-group-mobile">
+                        <input type="text" id="mobile-credit-code-input" class="credit-code-input-mobile"
+                            placeholder="ABCD-EFGH-IJKL-MNOP" maxlength="25" autocomplete="off" spellcheck="false">
+                        <button type="button" class="btn-primary credit-redeem-btn-mobile" id="btn-mobile-redeem"
+                            onclick="redeemMobileCreditCode()">Redeem</button>
+                    </div>
+                    <div id="mobile-credit-redeem-status" class="credit-redeem-status-mobile" role="status"
+                        aria-live="polite"></div>
+                </div>
+            </div>
+
+            <!-- Transactions Header & Filter Pills -->
+            <div class="credits-tx-header-mobile">
+                <span class="credits-tx-title-mobile">Transaction History</span>
+                <div class="credits-filter-pills-mobile">
+                    <button type="button" class="credit-filter-pill-mobile active" data-filter="all"
+                        onclick="filterMobileTransactions('all')">All</button>
+                    <button type="button" class="credit-filter-pill-mobile" data-filter="credit"
+                        onclick="filterMobileTransactions('credit')">Credits</button>
+                    <button type="button" class="credit-filter-pill-mobile" data-filter="debit"
+                        onclick="filterMobileTransactions('debit')">Used</button>
+                </div>
+            </div>
+
+            <!-- Transactions List -->
+            <div id="mobile-credits-tx-list" class="credits-tx-list-mobile" aria-live="polite">
+                <p class="history-empty">Loading transactions...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Notes & Cheat Sheet Modal -->
+    <div id="notes-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <h3 style="font-size: 1rem; font-weight: 700; color: #fff;">Quick Notes &amp; Cheat Sheet</h3>
+                </div>
+                <button type="button" class="btn-icon" onclick="closeNotesModal()">✕</button>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <input type="text" id="mobile-notes-search" class="form-input" placeholder="Search notes..."
+                    oninput="filterMobileNotes(this.value)">
+            </div>
+            <div id="mobile-notes-list" class="notes-list-mobile">
+                <p style="color: #94a3b8; font-size: 0.78rem;">Loading notes...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile & AI Settings Modal -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 style="font-size: 1rem; font-weight: 700; color: #fff;">Profile &amp; AI Settings</h3>
+                <button type="button" class="btn-icon" onclick="closeSettings()">✕</button>
+            </div>
+
+            <!-- Profile Info -->
+            <div class="form-group">
+                <label class="form-label">User Name</label>
+                <input type="text" id="input-profile-name" class="form-input" placeholder="Enter your name">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" id="input-profile-email" class="form-input" placeholder="Enter your email address">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Phone Number</label>
+                <input type="tel" id="input-profile-phone" class="form-input" placeholder="Enter your phone number">
+            </div>
+
+            <!-- Candidate Resume -->
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label class="form-label" style="margin-bottom: 0;">Candidate Resume</label>
+                    <button type="button" id="btn-mobile-upload-resume" class="btn-icon"
+                        style="width: auto; height: 26px; padding: 0 10px; font-size: 0.72rem; border-radius: 6px; color: #38bdf8;"
+                        onclick="document.getElementById('mobile-resume-upload').click()">Upload PDF</button>
+                    <input type="file" id="mobile-resume-upload" accept=".pdf,application/pdf" style="display: none;"
+                        onchange="handleResumeUpload(this)">
+                </div>
+
+                <!-- Saved Resume Status Card with Delete Button -->
+                <div id="mobile-saved-resume-card" class="mobile-saved-resume-card" style="display: none;">
+                    <div class="saved-resume-info-mobile">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        <div style="min-width: 0; flex: 1;">
+                            <div id="mobile-resume-filename" class="saved-resume-name-mobile">resume.pdf</div>
+                            <div id="mobile-resume-meta" class="saved-resume-meta-mobile">Saved on this device</div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-icon-danger" onclick="deleteMobileResume()" title="Delete saved resume"
+                        aria-label="Delete saved resume">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <textarea id="textarea-resume" class="form-textarea"
+                    placeholder="Paste resume summary or click 'Upload PDF' above..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Target Job Description (Optional)</label>
+                <textarea id="textarea-jd" class="form-textarea"
+                    placeholder="Paste job description to align answers with required skills..."></textarea>
+            </div>
+
+            <button type="button" class="btn-primary" onclick="saveSettings()">Save Configuration</button>
+        </div>
+    </div>
+
+    <!-- Host PC Disconnected Lockout Overlay -->
+    <div id="mobile-disconnected-overlay" class="mobile-disconnected-overlay" style="display: none;">
+        <div class="disconnected-card">
+            <div class="disconnected-icon">🔒</div>
+            <h2 class="disconnected-title">Disconnected from PC</h2>
+            <p class="disconnected-desc">
+                The host PC has ended this companion session. To use your phone again, please scan the QR code on your PC screen.
+            </p>
+            <div class="disconnected-badge">Session Terminated</div>
+        </div>
+    </div>
+
+    <!-- Speech Recognition Browser Permission / HTTPS Guide Modal -->
+    <div id="speech-help-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.1rem;">🎙️</span>
+                    <h3 style="font-size: 1rem; font-weight: 700; color: #fff;">Live Listening on Mobile</h3>
+                </div>
+                <button type="button" class="btn-icon" onclick="closeSpeechHelpModal()">✕</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.82rem; color: #cbd5e1; line-height: 1.45;">
+                <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 10px; color: #fca5a5;">
+                    <strong style="color: #f87171;">Browser Security Restriction (HTTP vs HTTPS):</strong>
+                    <p style="margin: 4px 0 0; font-size: 0.76rem; color: #fecaca;">Mobile browsers (Chrome / Safari) disable microphone and Web Speech API on local Wi-Fi IP connections (<code>http://192.168.x.x</code>) because it is not an encrypted HTTPS link.</p>
+                </div>
+
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 10px;">
+                    <strong style="color: #6ee7b7;">💡 Recommended Workflow (Zero Setup):</strong>
+                    <p style="margin: 4px 0 0; font-size: 0.76rem; color: #a7f3d0;">Aapko phone ka mic use karne ki zaroorat nahi hai! Laptop/PC me <strong>Loopback Audio</strong> already interviewer ki voice (Teams/Zoom/Meet) direct speaker se capture karta hai, aur answers phone screen par live stream ho jate hain.</p>
+                </div>
+
+                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 10px;">
+                    <strong style="color: #38bdf8;">🔧 Agar Phone Mic hi use karna ho (Chrome Android):</strong>
+                    <ol style="margin: 6px 0 0 16px; padding: 0; font-size: 0.75rem; color: #94a3b8; display: flex; flex-direction: column; gap: 5px;">
+                        <li>Chrome me new tab me open karein: <code style="color: #fbbf24;">chrome://flags</code></li>
+                        <li>Search karein: <code style="color: #fbbf24;">Insecure origins treated as secure</code></li>
+                        <li>Is box me enter karein: <code id="help-modal-ip-hint" style="color: #38bdf8;">http://...:8000</code></li>
+                        <li>Dropdown ko <strong>Enabled</strong> karein aur Chrome ko <strong>Relaunch</strong> karein. Phone mic turant enable ho jayega!</li>
+                    </ol>
+                </div>
+
+                <button type="button" class="btn-primary" onclick="closeSpeechHelpModal()" style="margin-top: 4px;">Got It</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/mobile.js"></script>
+</body>
+
+</html>

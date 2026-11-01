@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interview Copilot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+    <!-- =====================================================================
+         VIEW 1: PAIRING HUB & DASHBOARD (CLEAN & DIRECT GLASS)
+         ===================================================================== -->
+    <div id="view-hub">
+        <div class="dashboard-container">
+            <!-- Top Drag Header with Controls -->
+            {% include 'components/header.html' %}
+
+            <div class="hub-body sidebar-collapsed">
+                <!-- Left Navigation Sidebar -->
+                {% include 'components/sidebar.html' %}
+
+                <!-- Main Home / Pairing Screen -->
+                {% include 'components/tab_home.html' %}
+
+                <!-- Profile Tab -->
+                {% include 'components/tab_profile.html' %}
+
+                <!-- Customize Tab -->
+                {% include 'components/tab_customize.html' %}
+
+                <!-- Session History Tab -->
+                {% include 'components/tab_history.html' %}
+
+                <!-- Notes & Cheat Sheet Tab -->
+                {% include 'components/tab_notes.html' %}
+
+                <!-- Credit & History Tab -->
+                {% include 'components/tab_credits.html' %}
+
+                <!-- Help & Guide Tab -->
+                {% include 'components/tab_help.html' %}
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         VIEW 2: IN-APP LIVE COPILOT WORKSPACE (SAME WINDOW)
+         ===================================================================== -->
+    {% include 'components/view_copilot.html' %}
+
+    <!-- =====================================================================
+         SCRIPTS: UNIFIED NAVIGATION & WEBSOCKET ENGINE
+         ===================================================================== -->
+    <script>
+        window.INITIAL_PAIRING_TOKEN = "{{ pairing_token }}";
+    </script>
+    <script src="/static/js/desktop.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,53 @@
+                <section id="notes-view" class="profile-settings-view" aria-labelledby="notes-title">
+                    <div class="profile-settings-panel">
+                        <div class="profile-settings-header"
+                            style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <div>
+                                <h2 id="notes-title">Interview Notebook &amp; Cheat Sheet</h2>
+                                <p class="profile-settings-note">Personal talking points, code snippets, and cheat-sheet
+                                    notes accessible instantly in your overlay.</p>
+                            </div>
+                            <button type="button" class="btn-action" onclick="resetNoteEditor()"
+                                style="background: #10b981; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">
+                                + New Note
+                            </button>
+                        </div>
+
+                        <!-- Note Editor Form (Add / Edit) -->
+                        <div id="note-editor-card"
+                            style="margin-bottom: 14px; padding: 12px; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px;">
+                            <input type="hidden" id="note-editor-id" value="">
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+                                <input type="text" id="note-editor-title"
+                                    placeholder="Note Title (e.g. Self Intro, React Hooks, System Design Checklist)"
+                                    style="flex: 1; min-width: 200px; padding: 7px 10px; background: var(--surface-control); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
+                                <button type="button" class="btn-action" id="btn-save-note" onclick="saveCurrentNote()"
+                                    style="background: var(--accent); color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">Save
+                                    Note</button>
+                                <button type="button" class="btn-action" id="btn-cancel-note" onclick="cancelNoteEdit()"
+                                    style="display: none; background: transparent; color: #94a3b8; border: 1px solid rgba(255, 255, 255, 0.12); padding: 7px 12px; border-radius: 6px; font-size: 0.78rem;">Cancel</button>
+                            </div>
+                            <textarea id="note-editor-content" rows="4"
+                                placeholder="Write your cheat-sheet notes, code snippet, STAR answers, or key points here..."
+                                style="width: 100%; padding: 8px 10px; background: var(--surface-control); border: 1px solid var(--border); border-radius: 6px; color: #e2e8f0; font-family: 'JetBrains Mono', monospace; font-size: 0.80rem; line-height: 1.45; resize: vertical;"></textarea>
+                            <div id="note-editor-status" style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
+                            </div>
+                        </div>
+
+                        <!-- Notes List Header & Search -->
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px;">
+                            <span
+                                style="font-size: 0.78rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em;">Saved
+                                Notes (<span id="notes-count">0</span>)</span>
+                            <input type="text" id="notes-search-input" oninput="filterDashboardNotes()"
+                                placeholder="Filter notes..."
+                                style="max-width: 220px; padding: 4px 8px; font-size: 0.75rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: #fff;">
+                        </div>
+
+                        <!-- Notes List Items Container -->
+                        <div id="notes-items-container" class="notes-items-container" aria-live="polite">
+                            <p class="history-empty">Loading notes...</p>
+                        </div>
+                    </div>
+                </section>

@@ -1,0 +1,87 @@
+                <main class="hub-main">
+                    <section class="hub-intro">
+                        <h1 class="hub-title">Interview Copilot</h1>
+                        <p class="hub-description">
+                            Desktop copilot with real-time audio detection & direct spoken solutions.
+                        </p>
+                        <button type="button" id="home-start-copilot-btn" class="home-start-button" onclick="switchToCopilotView()"
+                            aria-label="Start Copilot">
+                            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m13 2-3 8h7l-6 12 2-9H6l7-11Z"></path>
+                            </svg>
+                            <span id="home-start-btn-label">Start Copilot</span>
+                        </button>
+                        <div id="mobile-session-active-card" class="mobile-session-active-card" style="display: none;">
+                            <div class="mobile-active-header">
+                                <span class="mobile-pulse-dot"></span>
+                                <span class="mobile-active-label" id="mobile-active-status-text">Controlled via Mobile Phone</span>
+                            </div>
+                            <p class="mobile-active-help" id="mobile-active-help-text">
+                                Session is managed from your paired phone. PC start button is locked.
+                            </p>
+                            <button type="button" class="btn-take-over-pc" onclick="takeOverOnPC()"
+                                title="Transfer Copilot controls & screen to this laptop">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                                <span>Take Over on PC</span>
+                            </button>
+                        </div>
+                        <div class="resume-status-row">
+                            <span id="resume-status-badge">
+                                Resume Ready
+                            </span>
+                        </div>
+                        <p id="action-status" role="status" aria-live="polite"></p>
+                    </section>
+
+                    <section class="right-col" id="companion-panel" aria-label="Phone companion pairing">
+                        <div class="qr-card" id="qr-card-container">
+                            <img src="/qr" id="qr-image" alt="Pairing QR Code">
+                            <!-- Overlay when companion is connected -->
+                            <div id="qr-connected-overlay" class="qr-connected-overlay" style="display: none;">
+                                <div class="qr-lock-icon">🔒</div>
+                                <span class="qr-lock-badge">Shifted to Mobile</span>
+                            </div>
+                        </div>
+
+                        <!-- Unconnected State Info -->
+                        <div id="companion-unpaired-info">
+                            <div class="qr-instructions">Phone Companion</div>
+                            <p class="qr-description">
+                                Scan with camera for live phone answers.
+                            </p>
+                            <button type="button" class="qr-link" data-mobile-url="{{ mobile_url }}"
+                                onclick="copyMobileUrl()" title="Click to copy phone companion link"
+                                aria-label="Copy phone companion link">
+                                {{ mobile_url }}
+                            </button>
+                        </div>
+
+                        <!-- Connected / Shifted State Info -->
+                        <div id="companion-paired-info" class="companion-paired-info" style="display: none;">
+                            <div class="companion-status-chip">
+                                <span class="companion-pulse-dot"></span>
+                                <span class="companion-status-text">Connected to Mobile</span>
+                            </div>
+                            <h3 class="companion-shifted-title">Screen Shifted to Mobile Device</h3>
+                            <p class="companion-shifted-desc">
+                                Interview session is active on your phone. QR pairing is locked.
+                            </p>
+                            <button type="button" class="btn-disconnect-companion" onclick="disconnectCompanion()"
+                                title="Disconnect Mobile Phone &amp; Unlock QR Code">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                                    <line x1="12" y1="2" x2="12" y2="12"></line>
+                                </svg>
+                                <span>Disconnect / Reset QR</span>
+                            </button>
+                        </div>
+
+                        <p id="qr-copy-status" role="status" aria-live="polite"></p>
+                    </section>
+                </main>

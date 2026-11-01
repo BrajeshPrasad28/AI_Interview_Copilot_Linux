@@ -1,0 +1,69 @@
+                <section id="credits-view" class="profile-settings-view" aria-labelledby="credits-title">
+                    <div class="profile-settings-panel">
+                        <div class="profile-settings-header"
+                            style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <div>
+                                <h2 id="credits-title">Credit &amp; History</h2>
+                            </div>
+                            <button type="button" class="btn-icon-only" onclick="loadCreditsData()" title="Refresh" aria-label="Refresh">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Unified 2-Column Overview & Redeem Card -->
+                        <div class="credit-overview-card">
+                            <!-- Column 1: Available Credit Points & Account Info -->
+                            <div class="credit-col-balance">
+                                <span class="credit-balance-label">Available Credit Points</span>
+                                <div class="credit-balance-val-row">
+                                    <span id="credit-balance-value" class="credit-balance-val">100</span>
+                                    <span class="credit-balance-unit">Points</span>
+                                </div>
+                                <div class="credit-user-info-row">
+                                    <span class="credit-account-dot"></span>
+                                    <span>Account: <strong id="credit-user-name">User</strong></span>
+                                    <span id="credit-user-email-wrap" style="color: var(--text-secondary);">(<span
+                                            id="credit-user-email">user@example.com</span>)</span>
+                                </div>
+                            </div>
+
+                            <!-- Column 2: Voucher Input Box & Redeem Button -->
+                            <div class="credit-col-redeem">
+                                <div class="credit-redeem-header">
+                                    <span class="credit-redeem-title">Enter your Credit Code</span>
+                                </div>
+                                <div class="credit-input-group">
+                                    <input type="text" id="credit-code-input" class="credit-code-input"
+                                        placeholder="XXXX - XXXX - XXXX - XXXX" maxlength="19" autocomplete="off"
+                                        spellcheck="false" oninput="formatCreditCodeInput(this)"
+                                        onkeydown="if(event.key==='Enter') redeemCreditCode()">
+                                    <button type="button" class="btn-action btn-redeem" id="btn-redeem"
+                                        onclick="redeemCreditCode()">
+                                        Redeem
+                                    </button>
+                                </div>
+                                <div id="credit-redeem-status" class="credit-redeem-status" style="display: none;"></div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Transaction History Ledger Section -->
+                        <div class="credit-history-section">
+                            <div class="credit-history-header">
+                                <span class="credit-history-title">TRANSACTION HISTORY</span>
+                                <div class="credit-history-filters">
+                                    <button type="button" class="credit-filter-btn active" id="filter-all-btn"
+                                        onclick="filterCreditHistory('all', this)">All</button>
+                                    <button type="button" class="credit-filter-btn" id="filter-credit-btn"
+                                        onclick="filterCreditHistory('credit', this)">Credits</button>
+                                    <button type="button" class="credit-filter-btn" id="filter-debit-btn"
+                                        onclick="filterCreditHistory('debit', this)">Used</button>
+                                </div>
+                            </div>
+                            <div id="credit-history-list" class="credit-history-list" aria-live="polite">
+                                <p class="history-empty">Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
