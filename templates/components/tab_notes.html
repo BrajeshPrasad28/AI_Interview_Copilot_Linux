@@ -27,10 +27,12 @@
                                 <button type="button" class="btn-action" id="btn-cancel-note" onclick="cancelNoteEdit()"
                                     style="display: none; background: transparent; color: #94a3b8; border: 1px solid rgba(255, 255, 255, 0.12); padding: 7px 12px; border-radius: 6px; font-size: 0.78rem;">Cancel</button>
                             </div>
-                            <textarea id="note-editor-content" rows="4"
-                                placeholder="Write your cheat-sheet notes, code snippet, STAR answers, or key points here..."
+                            <textarea id="note-editor-content" rows="4" maxlength="500"
+                                placeholder="Write your cheat-sheet notes, code snippet, STAR answers, or key points here (max 500 characters)..."
                                 style="width: 100%; padding: 8px 10px; background: var(--surface-control); border: 1px solid var(--border); border-radius: 6px; color: #e2e8f0; font-family: 'JetBrains Mono', monospace; font-size: 0.80rem; line-height: 1.45; resize: vertical;"></textarea>
-                            <div id="note-editor-status" style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                                <div id="note-editor-status" style="font-size: 0.72rem; color: #94a3b8;"></div>
+                                <div id="note-editor-char-counter" style="font-size: 0.72rem; color: #94a3b8; font-weight: 500;">0/500 characters</div>
                             </div>
                         </div>
 

@@ -130,6 +130,15 @@ function handleIncomingMessage(msg) {
         case 'copilot_ended':
             stopListening();
             resetCopilotTimer();
+            if (msg.reason === 'insufficient_credits') {
+                showErrorToast(msg.message || '⚠️ Call ended: Insufficient credits.');
+                alert(msg.message || 'Call ended: Insufficient credits. Please recharge your credits to continue.');
+            }
+            break;
+
+        case 'error':
+            if (thinkingBox) thinkingBox.classList.remove('active');
+            showErrorToast(msg.message || 'Error occurred.');
             break;
 
         case 'companion_disconnected':
@@ -425,7 +434,7 @@ function toggleListening() {
     }
 }
 
-function startListening() {
+async function startListening() {
     if (isHostDisconnected) {
         showMobileDisconnectedOverlay();
         showErrorToast('Disconnected from host PC. Please scan QR code again.');
@@ -433,26 +442,27 @@ function startListening() {
     }
     // If interview session is not started yet, auto-start the session as well
     if (!isCopilotActive) {
-        authFetch('/api/history/session/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Device': 'mobile' },
-            body: JSON.stringify({ source: 'mobile' })
-        })
-            .then(res => {
-                if (!res.ok) {
-                    if (res.status === 403) {
-                        showMobileDisconnectedOverlay();
-                    }
-                    throw new Error('Host disconnected');
+        try {
+            const res = await authFetch('/api/history/session/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Device': 'mobile' },
+                body: JSON.stringify({ source: 'mobile' })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                if (res.status === 403) {
+                    showMobileDisconnectedOverlay();
                 }
-                return res.json();
-            })
-            .then(data => {
-                const startTime = (data && data.start_time) ? data.start_time : Date.now();
-                startCopilotTimerAt(startTime);
-                updateSessionButtonUI(true);
-            })
-            .catch(() => {});
+                showErrorToast(data.detail || 'Cannot start session due to insufficient credits.');
+                return;
+            }
+            const startTime = (data && data.start_time) ? data.start_time : Date.now();
+            startCopilotTimerAt(startTime);
+            updateSessionButtonUI(true);
+        } catch (e) {
+            showErrorToast('Failed to start session: ' + e.message);
+            return;
+        }
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -796,10 +806,11 @@ let cachedMobileTransactions = [];
 let currentMobileTxFilter = 'all';
 
 function updateMobileCreditsDisplay(balance) {
+    const formatted = Number(balance ?? 0).toFixed(2);
     const badge = document.getElementById('mobile-credit-points');
-    if (badge) badge.textContent = balance;
+    if (badge) badge.textContent = formatted;
     const modalBal = document.getElementById('modal-credit-balance-val');
-    if (modalBal) modalBal.textContent = balance;
+    if (modalBal) modalBal.textContent = formatted;
 }
 
 function openCreditsModal() {
@@ -898,7 +909,7 @@ function renderMobileTransactions(txList) {
                     <div class="credit-tx-desc-mobile">${displayDesc}</div>
                     <div class="credit-tx-meta-mobile">${detailsHtml ? detailsHtml + ' • ' : ''}${dateStr}</div>
                 </div>
-                <div class="credit-tx-amount-mobile ${amountClass}">${sign}${Math.abs(tx.amount)}</div>
+                <div class="credit-tx-amount-mobile ${amountClass}">${sign}${Number(Math.abs(tx.amount || 0)).toFixed(2)}</div>
             </div>
         `;
     }).join('');

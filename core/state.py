@@ -30,7 +30,7 @@ BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.absp
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 
-APP_DATA_DIR = os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "InterviewTool")
+APP_DATA_DIR = os.getenv("INTERVIEW_TOOL_DATA_DIR") or os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "InterviewTool")
 APP_PREFERENCES_PATH = os.path.join(APP_DATA_DIR, "preferences.json")
 SESSION_HISTORY_PATH = os.path.join(APP_DATA_DIR, "session_history.json")
 RESUME_DATA_PATH = os.path.join(APP_DATA_DIR, "saved_resume.json")
@@ -285,8 +285,63 @@ def redeem_credit_code(raw_code: str, user_name: str, user_email: str, user_phon
         "transaction": transaction
     }
 
+DEFAULT_BILLING_RATES: Dict[str, Any] = {
+    "call_per_minute": 2.50,
+    "snap_per_count": 5.00,
+    "note_per_count": 2.00,
+    "note_max_chars": 500,
+}
+
+current_billing_rates: Dict[str, Any] = DEFAULT_BILLING_RATES.copy()
+
+def get_billing_rate(key: str) -> Any:
+    return current_billing_rates.get(key, DEFAULT_BILLING_RATES.get(key))
+
+def set_billing_rates(new_rates: Dict[str, Any]) -> None:
+    for key, val in new_rates.items():
+        if key in DEFAULT_BILLING_RATES:
+            try:
+                if key == "note_max_chars":
+                    current_billing_rates[key] = int(val)
+                else:
+                    current_billing_rates[key] = round(float(val), 2)
+            except (ValueError, TypeError):
+                pass
+    logger.info(f"Billing rates updated: {current_billing_rates}")
+
+async def sync_billing_rates_from_remote(remote_url: Optional[str] = None) -> bool:
+    """Fetch remote billing rates on startup. Fallback gracefully to default rates without crash."""
+    url = remote_url or os.getenv("REMOTE_BILLING_RATES_URL", "").strip()
+    if not url:
+        return False
+    try:
+        import httpx
+        user_email = current_state.get("profile_email", "")
+        params = {"email": user_email} if user_email else {}
+        async with httpx.AsyncClient(timeout=3.5) as client:
+            resp = await client.get(url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                rates = data.get("rates") if isinstance(data, dict) else None
+                if rates and isinstance(rates, dict):
+                    set_billing_rates(rates)
+                    return True
+    except Exception as exc:
+        logger.warning(f"Could not sync billing rates from remote ({url}): {exc}. Using default rates.")
+    return False
+
+# Live Call Billing Worker
+live_call_billing_task: Optional[asyncio.Task] = None
+
+def get_credits_balance() -> float:
+    try:
+        data = load_app_credits()
+        return round(float(data.get("balance", 0.0)), 2)
+    except Exception:
+        return 0.0
+
 def deduct_credit_usage(
-    amount: int,
+    amount: float,
     user_name: str,
     user_email: str,
     user_phone: str,
@@ -296,8 +351,9 @@ def deduct_credit_usage(
     count: int = 0
 ) -> Optional[Dict[str, Any]]:
     credits_data = load_app_credits()
-    cur_bal = credits_data.get("balance", 0)
-    new_bal = max(0, cur_bal - amount)
+    cur_bal = round(float(credits_data.get("balance", 0.0)), 2)
+    amount_float = round(float(amount), 2)
+    new_bal = max(0.0, round(cur_bal - amount_float, 2))
     credits_data["balance"] = new_bal
 
     now = datetime.now()
@@ -306,7 +362,7 @@ def deduct_credit_usage(
     transaction = {
         "id": tx_id,
         "type": "debit",
-        "amount": -amount,
+        "amount": -amount_float,
         "balance_after": new_bal,
         "timestamp": now.strftime("%Y-%m-%d %I:%M %p"),
         "code": "",
@@ -326,6 +382,82 @@ def deduct_credit_usage(
 
     save_app_credits(credits_data)
     return transaction
+
+async def _call_billing_ticker():
+    """Background ticker that deducts call_per_minute at every 60s boundary and terminates if insufficient."""
+    logger.info("Call billing ticker started.")
+    minute_counter = 1
+    try:
+        while copilot_session_state.get("is_active"):
+            await asyncio.sleep(60)
+            if not copilot_session_state.get("is_active"):
+                break
+            minute_counter += 1
+            call_rate = get_billing_rate("call_per_minute")
+            current_bal = get_credits_balance()
+
+            if current_bal < call_rate:
+                logger.warning(f"Balance {current_bal} is insufficient for minute {minute_counter} ({call_rate}). Terminating call.")
+                session_history.end_session()
+                copilot_session_state["is_active"] = False
+                copilot_session_state["started_at"] = None
+                await manager.broadcast({
+                    "type": "copilot_ended",
+                    "reason": "insufficient_credits",
+                    "message": f"Session auto-terminated: Insufficient credits to continue call ({current_bal:.2f} pts available, {call_rate:.2f} pts required)."
+                })
+                break
+
+            # Deduct for this minute block
+            tx = deduct_credit_usage(
+                amount=call_rate,
+                description=f"Call Minute {minute_counter} (-{call_rate:.2f} pts)",
+                user_name=current_state.get("profile_name", ""),
+                user_email=current_state.get("profile_email", ""),
+                user_phone=current_state.get("profile_phone", ""),
+                duration=f"{minute_counter}m",
+                total_snaps=session_metrics.get("total_snaps", 0),
+                count=session_metrics.get("qa_count", 0)
+            )
+            if tx:
+                await manager.broadcast({
+                    "type": "credits_updated",
+                    "balance": tx["balance_after"],
+                    "transaction": tx
+                })
+    except asyncio.CancelledError:
+        logger.info("Call billing ticker stopped.")
+        raise
+    except Exception as exc:
+        logger.error(f"Error in call billing ticker: {exc}")
+
+def start_call_billing_ticker():
+    global live_call_billing_task
+    stop_call_billing_ticker()
+    if main_event_loop and main_event_loop.is_running():
+        try:
+            running_loop = asyncio.get_running_loop()
+            if running_loop is main_event_loop:
+                live_call_billing_task = main_event_loop.create_task(_call_billing_ticker())
+            else:
+                live_call_billing_task = asyncio.run_coroutine_threadsafe(
+                    _call_billing_ticker(),
+                    main_event_loop
+                )
+        except RuntimeError:
+            live_call_billing_task = asyncio.run_coroutine_threadsafe(
+                _call_billing_ticker(),
+                main_event_loop
+            )
+
+def stop_call_billing_ticker():
+    global live_call_billing_task
+    if live_call_billing_task:
+        try:
+            live_call_billing_task.cancel()
+        except Exception:
+            pass
+        live_call_billing_task = None
 
 main_event_loop: Optional[asyncio.AbstractEventLoop] = None
 
@@ -396,26 +528,11 @@ def record_session_qa(result: Dict[str, Any], question: str = "") -> None:
     except Exception as exc:
         logger.warning("Could not persist session Q&A history: %s", exc)
 
-    # Record credit usage (-5 credits) with session metrics
+    # Update session metrics
     try:
         session_metrics["qa_count"] += 1
-        tx = deduct_credit_usage(
-            amount=5,
-            description="Voucher Used (-5 Credits)",
-            user_name=current_state.get("profile_name", ""),
-            user_email=current_state.get("profile_email", ""),
-            user_phone=current_state.get("profile_phone", ""),
-            duration=get_session_duration_str(),
-            total_snaps=session_metrics["total_snaps"],
-            count=session_metrics["qa_count"]
-        )
-        if tx and main_event_loop and main_event_loop.is_running():
-            asyncio.run_coroutine_threadsafe(
-                manager.broadcast({"type": "credits_updated", "balance": tx["balance_after"], "transaction": tx}),
-                main_event_loop
-            )
-    except Exception as exc:
-        logger.warning("Could not record credit debit: %s", exc)
+    except Exception:
+        pass
 
 # IP Helper
 def get_local_ip() -> str:

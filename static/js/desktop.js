@@ -463,6 +463,17 @@
         function openNotesManager() {
             setHubPanel('notes');
             loadDashboardNotes();
+            const noteContentInput = document.getElementById('note-editor-content');
+            if (noteContentInput) {
+                noteContentInput.addEventListener('input', () => {
+                    const charCountEl = document.getElementById('note-editor-char-counter');
+                    if (charCountEl) {
+                        const len = noteContentInput.value.length;
+                        charCountEl.textContent = `${len}/500 characters`;
+                        charCountEl.style.color = len >= 500 ? '#ef4444' : (len > 450 ? '#f59e0b' : '#94a3b8');
+                    }
+                });
+            }
         }
 
         async function loadDashboardNotes() {
@@ -585,6 +596,11 @@
             document.getElementById('btn-save-note').textContent = 'Save Note';
             document.getElementById('btn-cancel-note').style.display = 'none';
             document.getElementById('note-editor-status').textContent = '';
+            const charCountEl = document.getElementById('note-editor-char-counter');
+            if (charCountEl) {
+                charCountEl.textContent = '0/500 characters';
+                charCountEl.style.color = '#94a3b8';
+            }
             document.getElementById('note-editor-title').focus();
         }
 
@@ -597,6 +613,12 @@
             document.getElementById('btn-save-note').textContent = 'Update Note';
             document.getElementById('btn-cancel-note').style.display = 'inline-block';
             document.getElementById('note-editor-status').textContent = `Editing: ${note.title}`;
+            const charCountEl = document.getElementById('note-editor-char-counter');
+            if (charCountEl) {
+                const len = (note.content || '').length;
+                charCountEl.textContent = `${len}/500 characters`;
+                charCountEl.style.color = len >= 500 ? '#ef4444' : (len > 450 ? '#f59e0b' : '#94a3b8');
+            }
             document.getElementById('note-editor-card').scrollIntoView({ behavior: 'smooth' });
         }
 
@@ -609,6 +631,12 @@
             const title = document.getElementById('note-editor-title').value.trim();
             const content = document.getElementById('note-editor-content').value.trim();
             const status = document.getElementById('note-editor-status');
+
+            if (content.length > 500) {
+                status.textContent = 'Note content exceeds the 500 characters limit.';
+                status.style.color = '#ef4444';
+                return;
+            }
 
             if (!title && !content) {
                 status.textContent = 'Please enter a title or note content.';
@@ -778,10 +806,10 @@
 
                 // Update live balance in header pill & stat card
                 const headerBadge = document.getElementById('header-credit-points');
-                if (headerBadge) headerBadge.textContent = data.balance ?? 0;
+                if (headerBadge) headerBadge.textContent = Number(data.balance ?? 0).toFixed(2);
 
                 const balanceVal = document.getElementById('credit-balance-value');
-                if (balanceVal) balanceVal.textContent = data.balance ?? 0;
+                if (balanceVal) balanceVal.textContent = Number(data.balance ?? 0).toFixed(2);
 
                 const userNameEl = document.getElementById('credit-user-name');
                 if (userNameEl) userNameEl.textContent = data.user_name || 'User';
@@ -828,7 +856,8 @@
                 const card = document.createElement('div');
                 card.className = 'credit-tx-card';
 
-                const amountSign = isCredit ? `+${tx.amount}` : `${tx.amount}`;
+                const amtVal = Number(Math.abs(tx.amount || 0)).toFixed(2);
+                const amountSign = isCredit ? `+${amtVal}` : `-${amtVal}`;
                 const displayTitle = isCredit ? 'Credit Points Added' : 'Credit Points Used';
 
                 let metaHtml = '';
@@ -1235,7 +1264,7 @@
             }
             if (startNewSession) {
                 try {
-                    await fetch('/api/history/session/start', {
+                    const res = await fetch('/api/history/session/start', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1244,7 +1273,17 @@
                         },
                         body: JSON.stringify({ source: 'desktop' })
                     });
-                } catch (e) { }
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        const errMsg = errData.detail || 'Unable to start copilot session.';
+                        alert(errMsg);
+                        showStealthToast(`⚠️ ${errMsg}`);
+                        return;
+                    }
+                } catch (e) {
+                    alert('Error starting session: ' + e.message);
+                    return;
+                }
                 startCopilotTimer(true, explicitStartTime);
             } else {
                 startCopilotTimer(false, explicitStartTime);
@@ -1367,9 +1406,9 @@
                 }
                 if (typeof msg.credits_balance !== 'undefined') {
                     const headerBadge = document.getElementById('header-credit-points');
-                    if (headerBadge) headerBadge.textContent = msg.credits_balance;
+                    if (headerBadge) headerBadge.textContent = Number(msg.credits_balance ?? 0).toFixed(2);
                     const balanceVal = document.getElementById('credit-balance-value');
-                    if (balanceVal) balanceVal.textContent = msg.credits_balance;
+                    if (balanceVal) balanceVal.textContent = Number(msg.credits_balance ?? 0).toFixed(2);
                 }
                 if (msg.has_resume) {
                     updateDesktopResumeUI(true, msg.resume_filename);
@@ -1401,9 +1440,9 @@
             } else if (msg.type === 'credits_updated') {
                 if (typeof msg.balance !== 'undefined') {
                     const headerBadge = document.getElementById('header-credit-points');
-                    if (headerBadge) headerBadge.textContent = msg.balance;
+                    if (headerBadge) headerBadge.textContent = Number(msg.balance ?? 0).toFixed(2);
                     const balanceVal = document.getElementById('credit-balance-value');
-                    if (balanceVal) balanceVal.textContent = msg.balance;
+                    if (balanceVal) balanceVal.textContent = Number(msg.balance ?? 0).toFixed(2);
                 }
                 const hubBody = document.querySelector('.hub-body');
                 if (hubBody && hubBody.classList.contains('credits-open')) {
@@ -1526,6 +1565,11 @@
                 loadCreditsData();
                 currentCopilotStartTime = null;
 
+                if (msg.reason === 'insufficient_credits') {
+                    showStealthToast(`⚠️ ${msg.message || 'Call ended: Insufficient credits.'}`);
+                    alert(msg.message || 'Call automatically ended due to insufficient credits. Please recharge your credits to continue.');
+                }
+
                 // User requirement: Even when session ends on mobile, if mobile is still connected,
                 // KEEP THE START COPILOT BUTTON LOCKED on laptop!
                 // Only unlock when user clicks "Take Over on PC" or manually disconnects mobile.
@@ -1550,6 +1594,17 @@
                     refreshQrImage();
                 }
                 updateCompanionUI(Boolean(msg.connected));
+            } else if (msg.type === 'error') {
+                clearTimeout(thinkingTimer);
+                if (statusBanner && statusBannerText) {
+                    statusBannerText.textContent = msg.message || 'An error occurred.';
+                    statusBanner.style.background = 'rgba(239, 68, 68, 0.2)';
+                    statusBanner.style.color = '#ef4444';
+                    statusBanner.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                    statusBanner.style.display = 'flex';
+                    setTimeout(() => { statusBanner.style.display = 'none'; }, 5000);
+                }
+                showStealthToast(`⚠️ ${msg.message || 'Error occurred.'}`);
             } else if (msg.type === 'panic_clear') {
                 clearTimeout(thinkingTimer);
                 clearOverlay();

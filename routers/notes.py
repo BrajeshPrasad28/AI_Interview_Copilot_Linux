@@ -8,6 +8,10 @@ from core.state import (
     load_app_notes,
     save_app_notes,
     manager,
+    get_billing_rate,
+    get_credits_balance,
+    deduct_credit_usage,
+    current_state,
 )
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
@@ -26,6 +30,25 @@ async def api_save_note(payload: Dict[str, Any]):
 
     if not title and not content:
         raise HTTPException(status_code=400, detail="Note must have a title or content.")
+
+    # Strict Backend Character Length Validation (Max 500 chars)
+    max_chars = get_billing_rate("note_max_chars")
+    if len(content) > max_chars:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Note content exceeds maximum allowed limit of {max_chars} characters ({len(content)}/{max_chars} entered)."
+        )
+
+    # Billing Deduction: Only charged when creating a NEW note
+    is_new_note = not bool(note_id)
+    if is_new_note:
+        note_rate = get_billing_rate("note_per_count")
+        current_balance = get_credits_balance()
+        if current_balance < note_rate:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient credit points to create a new note. ({current_balance:.2f} available, {note_rate:.2f} points required)."
+            )
 
     if not title:
         first_line = content.split("\n")[0].strip()
@@ -54,6 +77,24 @@ async def api_save_note(payload: Dict[str, Any]):
             "updated_at": now_str
         }
         notes.insert(0, target_note)
+
+        # Deduct note_per_count credits for new note
+        note_rate = get_billing_rate("note_per_count")
+        tx = deduct_credit_usage(
+            amount=note_rate,
+            description=f"Quick Note Created (-{note_rate:.2f} pts)",
+            user_name=current_state.get("profile_name", ""),
+            user_email=current_state.get("profile_email", ""),
+            user_phone=current_state.get("profile_phone", ""),
+            total_snaps=0,
+            count=0
+        )
+        if tx:
+            await manager.broadcast({
+                "type": "credits_updated",
+                "balance": tx["balance_after"],
+                "transaction": tx
+            })
 
     notes.sort(key=lambda n: n.get("updated_at", ""), reverse=True)
     save_app_notes(notes)

@@ -19,6 +19,9 @@ from core.state import (
     ptt_resume_loopback,
     launch_desktop_overlay,
     copilot_session_state,
+    get_billing_rate,
+    get_credits_balance,
+    deduct_credit_usage,
 )
 
 logger = logging.getLogger("server")
@@ -90,6 +93,14 @@ async def api_ask_question(payload: Dict[str, Any]):
 @router.post("/api/snip", dependencies=[Depends(verify_pairing_token)])
 async def api_trigger_snip(payload: Optional[Dict[str, Any]] = None):
     """Trigger screen snip on host PC and solve with vision (offloaded to thread)."""
+    # Billing Pre-check: Requires snap_per_count points
+    snap_rate = get_billing_rate("snap_per_count")
+    current_balance = get_credits_balance()
+    if current_balance < snap_rate:
+        err_msg = f"Insufficient credit points to take screen snap. ({current_balance:.2f} available, {snap_rate:.2f} required)."
+        await manager.broadcast({"type": "status", "status": "error", "message": err_msg})
+        return {"success": False, "error": err_msg}
+
     mode = (payload or {}).get("mode", current_state["mode"])
     prompt = (payload or {}).get("prompt", "")
 
@@ -107,6 +118,23 @@ async def api_trigger_snip(payload: Optional[Dict[str, Any]] = None):
 
     result = await asyncio.to_thread(ai_engine.solve_screen_snip, img_bytes, user_prompt=prompt, mode=mode)
     record_session_qa(result, prompt or "Screen question (screenshot)")
+
+    # Deduct snap_per_count on successful solve
+    tx = deduct_credit_usage(
+        amount=snap_rate,
+        description=f"Screen Snap Solution (-{snap_rate:.2f} pts)",
+        user_name=current_state.get("profile_name", ""),
+        user_email=current_state.get("profile_email", ""),
+        user_phone=current_state.get("profile_phone", ""),
+        total_snaps=session_metrics.get("total_snaps", 1),
+        count=session_metrics.get("qa_count", 0)
+    )
+    if tx:
+        await manager.broadcast({
+            "type": "credits_updated",
+            "balance": tx["balance_after"],
+            "transaction": tx
+        })
 
     await manager.broadcast({
         "type": "new_answer",

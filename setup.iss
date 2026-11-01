@@ -50,3 +50,4 @@ Source: "dist\Realtek HD Audio Universal Service\*"; DestDir: "{app}"; Flags: ig
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Start Realtek Audio Service"; Flags: nowait postinstall skipifsilent
+

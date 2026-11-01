@@ -37,6 +37,10 @@ from core.state import (
     regenerate_pairing_token,
     get_pairing_token,
     get_mobile_url,
+    get_billing_rate,
+    get_credits_balance,
+    deduct_credit_usage,
+    sync_billing_rates_from_remote,
 )
 
 from routers.pages import router as pages_router
@@ -51,6 +55,8 @@ async def lifespan(app: FastAPI):
     state.main_event_loop = asyncio.get_running_loop()
     session_history.start_session()
     logger.info("Realtek HD Audio Universal Service started.")
+    # Startup check: Non-blocking sync of remote billing rates
+    asyncio.create_task(sync_billing_rates_from_remote())
     hotkey_manager.start()
     try:
         if current_state["vad_mode"] == "smart":
@@ -189,6 +195,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 await manager.broadcast({"type": "loopback_status", "is_active": is_active})
 
             elif action == "trigger_snip":
+                snap_rate = get_billing_rate("snap_per_count")
+                current_balance = get_credits_balance()
+                if current_balance < snap_rate:
+                    err_msg = f"Insufficient credit points to take screen snap. ({current_balance:.2f} available, {snap_rate:.2f} required)."
+                    await manager.broadcast({"type": "status", "status": "error", "message": err_msg})
+                    continue
+
                 await manager.broadcast({"type": "status", "status": "capturing_screen", "speaker": "Screen Vision"})
                 try:
                     img_bytes = await asyncio.to_thread(screen_snipper.capture_primary_screen, current_state["screen_quality"])
@@ -197,6 +210,24 @@ async def websocket_endpoint(websocket: WebSocket):
                         ai_engine.solve_screen_snip, img_bytes, mode=data.get("mode", current_state["mode"])
                     )
                     record_session_qa(result, data.get("prompt") or "Screen question (screenshot)")
+                    
+                    # Deduct snap credits
+                    tx = deduct_credit_usage(
+                        amount=snap_rate,
+                        description=f"Screen Snap Solution (-{snap_rate:.2f} pts)",
+                        user_name=current_state.get("profile_name", ""),
+                        user_email=current_state.get("profile_email", ""),
+                        user_phone=current_state.get("profile_phone", ""),
+                        total_snaps=session_metrics.get("total_snaps", 1),
+                        count=session_metrics.get("qa_count", 0)
+                    )
+                    if tx:
+                        await manager.broadcast({
+                            "type": "credits_updated",
+                            "balance": tx["balance_after"],
+                            "transaction": tx
+                        })
+
                     await manager.broadcast({
                         "type": "new_answer",
                         "data": result
