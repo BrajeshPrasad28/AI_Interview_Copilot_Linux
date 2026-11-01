@@ -18,8 +18,8 @@
                             style="margin-bottom: 14px; padding: 12px; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px;">
                             <input type="hidden" id="note-editor-id" value="">
                             <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-                                <input type="text" id="note-editor-title"
-                                    placeholder="Note Title (e.g. Self Intro, React Hooks, System Design Checklist)"
+                                <input type="text" id="note-editor-title" maxlength="50"
+                                    placeholder="Note Title (max 50 chars, e.g. Self Intro, React Hooks)"
                                     style="flex: 1; min-width: 200px; padding: 7px 10px; background: var(--surface-control); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 0.82rem;">
                                 <button type="button" class="btn-action" id="btn-save-note" onclick="saveCurrentNote()"
                                     style="background: var(--accent); color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">Save

@@ -31,6 +31,13 @@ async def api_save_note(payload: Dict[str, Any]):
     if not title and not content:
         raise HTTPException(status_code=400, detail="Note must have a title or content.")
 
+    # Strict Backend Title Length Validation (Max 50 chars)
+    if len(title) > 50:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Note title exceeds maximum allowed limit of 50 characters ({len(title)}/50 entered)."
+        )
+
     # Strict Backend Character Length Validation (Max 500 chars)
     max_chars = get_billing_rate("note_max_chars")
     if len(content) > max_chars:
@@ -52,7 +59,7 @@ async def api_save_note(payload: Dict[str, Any]):
 
     if not title:
         first_line = content.split("\n")[0].strip()
-        title = first_line[:40] if first_line else "Untitled Note"
+        title = first_line[:50] if first_line else "Untitled Note"
 
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     notes = load_app_notes()

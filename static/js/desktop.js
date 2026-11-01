@@ -632,6 +632,12 @@
             const content = document.getElementById('note-editor-content').value.trim();
             const status = document.getElementById('note-editor-status');
 
+            if (title.length > 50) {
+                status.textContent = 'Note title exceeds the 50 characters limit.';
+                status.style.color = '#ef4444';
+                return;
+            }
+
             if (content.length > 500) {
                 status.textContent = 'Note content exceeds the 500 characters limit.';
                 status.style.color = '#ef4444';

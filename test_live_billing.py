@@ -104,6 +104,18 @@ class TestLiveBillingSystem(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("500", ctx.exception.detail)
 
+    def test_note_creation_rejected_when_title_over_50_chars(self):
+        """Note creation must be rejected if title exceeds 50 characters."""
+        long_title = "A" * 51
+        payload = {
+            "title": long_title,
+            "content": "Valid short content"
+        }
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(api_save_note(payload))
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("50", ctx.exception.detail)
+
     def test_note_creation_blocked_when_balance_insufficient(self):
         """Note creation requires 2.00 points; rejected if balance < 2.00."""
         self.credits["balance"] = 1.00
