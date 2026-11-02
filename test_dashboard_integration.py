@@ -131,5 +131,31 @@ class TestDashboardIntegration(unittest.TestCase):
         self.assertFalse(res["success"])
         self.assertIn("server", res["error"].lower())
 
+    def test_startup_handshake_syncs_dashboard_apis_and_credits(self):
+        """Startup handshake automatically syncs managed API keys and direct dashboard credit additions."""
+        from core.state import sync_startup_handshake, save_app_credits, load_app_credits, ai_engine
+        from unittest.mock import MagicMock, patch
+
+        save_app_credits({"balance": 50.00, "redeemed_codes": [], "transactions": []})
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "status": "success",
+            "device_status": "matched",
+            "rates": {"call_per_minute": 2.50},
+            "groq_api": "gsk_test_remote_groq_key_12345",
+            "genai_api": "AIzaSy_test_remote_gemini_key_67890",
+            "total_redeemed": 300.00
+        }
+
+        with patch("httpx.Client.post", return_value=mock_resp):
+            res = sync_startup_handshake(dashboard_url="http://localhost:5000")
+
+        self.assertEqual(res.get("status"), "success")
+        self.assertEqual(ai_engine.groq_api_key, "gsk_test_remote_groq_key_12345")
+        self.assertEqual(ai_engine.api_key, "AIzaSy_test_remote_gemini_key_67890")
+        self.assertEqual(load_app_credits()["balance"], 350.00)
+
 if __name__ == "__main__":
     unittest.main()

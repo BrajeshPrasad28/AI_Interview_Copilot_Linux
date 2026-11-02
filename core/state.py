@@ -431,6 +431,51 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
                 if rates and isinstance(rates, dict):
                     set_billing_rates(rates)
 
+                groq_key = (data.get("groq_api") or "").strip()
+                if groq_key:
+                    ai_engine.update_groq_key(groq_key)
+                    current_state["has_groq_key"] = True
+                    current_state["has_api_key"] = True
+                    logger.info("Managed Groq API key synced from Central Dashboard.")
+
+                genai_key = (data.get("genai_api") or "").strip()
+                if genai_key:
+                    ai_engine.update_api_key(genai_key)
+                    current_state["has_gemini_key"] = True
+                    current_state["has_api_key"] = True
+                    logger.info("Managed Gemini API key synced from Central Dashboard.")
+
+                remote_total = float(data.get("total_redeemed") or 0.0)
+                if remote_total > 0:
+                    credits_data = load_app_credits()
+                    local_redeemed_total = sum(
+                        float(tx.get("amount", 0)) for tx in credits_data.get("transactions", [])
+                        if tx.get("type") == "credit" and "starter" not in str(tx.get("code", "")).lower()
+                    )
+                    diff = round(remote_total - local_redeemed_total, 2)
+                    if diff > 0:
+                        cur_bal = round(float(credits_data.get("balance", 0.0)), 2)
+                        new_bal = round(cur_bal + diff, 2)
+                        credits_data["balance"] = new_bal
+                        sync_txn = {
+                            "id": f"TXN-DASH-{secrets.randbelow(90000) + 10000}",
+                            "type": "credit",
+                            "amount": diff,
+                            "balance_after": new_bal,
+                            "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                            "code": "DASHBOARD-RECHARGE",
+                            "expiry_date": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d"),
+                            "description": "Credit Points Added via Dashboard",
+                            "user_name": current_state.get("profile_name", "User"),
+                            "user_email": current_state.get("profile_email", "user@example.com"),
+                            "user_phone": current_state.get("profile_phone", "N/A"),
+                        }
+                        if "transactions" not in credits_data:
+                            credits_data["transactions"] = []
+                        credits_data["transactions"].insert(0, sync_txn)
+                        save_app_credits(credits_data)
+                        logger.info(f"Synced +{diff} credits from Central Dashboard! New balance: {new_bal}")
+
                 return {
                     "status": "success",
                     "offline": False,
@@ -502,7 +547,7 @@ async def sync_billing_rates_from_remote(remote_url: Optional[str] = None) -> bo
         import httpx
         user_email = current_state.get("profile_email", "")
         params = {"email": user_email} if user_email else {}
-        async with httpx.AsyncClient(timeout=3.5) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(2.0, connect=0.8)) as client:
             resp = await client.get(url, params=params)
             if resp.status_code == 200:
                 data = resp.json()
