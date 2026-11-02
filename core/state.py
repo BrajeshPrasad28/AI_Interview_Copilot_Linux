@@ -342,9 +342,14 @@ def redeem_credit_code(
         "phone": user_phone or current_state.get("profile_phone", "")
     }
 
+    headers = {}
+    secret = os.getenv("DASHBOARD_APP_SECRET", "").strip()
+    if secret:
+        headers["X-App-Secret"] = secret
+
     try:
         import httpx
-        resp = httpx.post(endpoint, json=payload, timeout=5.0)
+        resp = httpx.post(endpoint, json=payload, headers=headers, timeout=5.0)
         data = resp.json() if resp.status_code == 200 else {}
         if resp.status_code == 200 and (data.get("success") or data.get("status") == "success"):
             amount = float(data.get("amount", 0))
@@ -413,10 +418,15 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
         "phone": profile_phone
     }
 
+    headers = {}
+    secret = os.getenv("DASHBOARD_APP_SECRET", "").strip()
+    if secret:
+        headers["X-App-Secret"] = secret
+
     try:
         import httpx
         with httpx.Client(timeout=3.5) as client:
-            resp = client.post(endpoint, json=payload)
+            resp = client.post(endpoint, json=payload, headers=headers)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("status") == "error" and data.get("error_code") == "device_mismatch":

@@ -157,5 +157,43 @@ class TestDashboardIntegration(unittest.TestCase):
         self.assertEqual(ai_engine.api_key, "AIzaSy_test_remote_gemini_key_67890")
         self.assertEqual(load_app_credits()["balance"], 350.00)
 
+    def test_startup_handshake_sends_app_secret_header(self):
+        """Startup handshake sends X-App-Secret header when configured."""
+        from core.state import sync_startup_handshake
+        import httpx
+
+        mock_post = MagicMock()
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"status": "success", "device_status": "matched"}
+        mock_post.return_value = mock_resp
+
+        with patch.dict(os.environ, {"DASHBOARD_APP_SECRET": "secure-app-secret-test-123"}):
+            with patch("httpx.Client.post", mock_post):
+                sync_startup_handshake(dashboard_url="http://localhost:5000")
+
+        self.assertTrue(mock_post.called)
+        called_kwargs = mock_post.call_args[1]
+        self.assertIn("headers", called_kwargs)
+        self.assertEqual(called_kwargs["headers"].get("X-App-Secret"), "secure-app-secret-test-123")
+
+    def test_redeem_credit_code_sends_app_secret_header(self):
+        """Voucher redemption sends X-App-Secret header when configured."""
+        from core.state import redeem_credit_code
+        import httpx
+
+        mock_post = MagicMock()
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"success": True, "amount": 100, "code": "ABCD-1234-EFGH-5678"}
+        mock_post.return_value = mock_resp
+
+        with patch.dict(os.environ, {"DASHBOARD_APP_SECRET": "secure-app-secret-test-123"}):
+            with patch("httpx.post", mock_post):
+                redeem_credit_code("SEC1-CODE-9999-5678", "User", "test@test.com")
+
+        self.assertTrue(mock_post.called)
+        called_kwargs = mock_post.call_args[1]
+        self.assertIn("headers", called_kwargs)
+        self.assertEqual(called_kwargs["headers"].get("X-App-Secret"), "secure-app-secret-test-123")
+
 if __name__ == "__main__":
     unittest.main()
