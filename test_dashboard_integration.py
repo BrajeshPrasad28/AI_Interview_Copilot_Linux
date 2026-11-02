@@ -195,5 +195,85 @@ class TestDashboardIntegration(unittest.TestCase):
         self.assertIn("headers", called_kwargs)
         self.assertEqual(called_kwargs["headers"].get("X-App-Secret"), "secure-app-secret-test-123")
 
+    def test_startup_handshake_syncs_redeemed_codes_ledger(self):
+        """Startup sync adds new dashboard codes even when local mock balance is high (fixes diff <= 0 bug)."""
+        from core.state import sync_startup_handshake, save_app_credits, load_app_credits
+        from unittest.mock import MagicMock, patch
+
+        # Local state has 500 mock credits
+        save_app_credits({
+            "balance": 500.00,
+            "redeemed_codes": ["DEV-TESTING-500"],
+            "transactions": [
+                {
+                    "id": "TXN-555503",
+                    "type": "credit",
+                    "amount": 500.0,
+                    "code": "DEV-TESTING-500",
+                    "balance_after": 500.0
+                }
+            ]
+        })
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "status": "success",
+            "device_status": "matched",
+            "rates": {"call_per_minute": 2.50},
+            "total_redeemed": 100.00,
+            "redeemed_codes": [
+                {"code": "ADMZ-6XN4-324P-M", "amount": 100}
+            ]
+        }
+
+        with patch("httpx.Client.post", return_value=mock_resp):
+            res = sync_startup_handshake(dashboard_url="http://localhost:5000")
+
+        self.assertEqual(res.get("status"), "success")
+        loaded = load_app_credits()
+        # Must reflect the +100 credits, resulting in 600.00
+        self.assertEqual(loaded["balance"], 600.00)
+        self.assertIn("ADMZ-6XN4-324P-M", loaded.get("redeemed_codes", []))
+
+    def test_startup_handshake_does_not_double_count_redeemed_codes(self):
+        """Already synced voucher codes are not credited a second time on subsequent handshakes."""
+        from core.state import sync_startup_handshake, save_app_credits, load_app_credits
+        from unittest.mock import MagicMock, patch
+
+        save_app_credits({
+            "balance": 600.00,
+            "redeemed_codes": ["DEV-TESTING-500", "ADMZ-6XN4-324P-M"],
+            "transactions": [
+                {
+                    "id": "TXN-SYNC-1",
+                    "type": "credit",
+                    "amount": 100.0,
+                    "code": "ADMZ-6XN4-324P-M",
+                    "balance_after": 600.0
+                }
+            ]
+        })
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "status": "success",
+            "device_status": "matched",
+            "rates": {"call_per_minute": 2.50},
+            "total_redeemed": 100.00,
+            "redeemed_codes": [
+                {"code": "ADMZ-6XN4-324P-M", "amount": 100}
+            ]
+        }
+
+        with patch("httpx.Client.post", return_value=mock_resp):
+            res = sync_startup_handshake(dashboard_url="http://localhost:5000")
+
+        self.assertEqual(res.get("status"), "success")
+        loaded = load_app_credits()
+        # Balance must remain exactly 600.00 (not 700.00)
+        self.assertEqual(loaded["balance"], 600.00)
+
 if __name__ == "__main__":
     unittest.main()

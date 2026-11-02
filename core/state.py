@@ -455,36 +455,78 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
                     current_state["has_api_key"] = True
                     logger.info("Managed Gemini API key synced from Central Dashboard.")
 
-                remote_total = float(data.get("total_redeemed") or 0.0)
-                if remote_total > 0:
-                    credits_data = load_app_credits()
-                    local_redeemed_total = sum(
-                        float(tx.get("amount", 0)) for tx in credits_data.get("transactions", [])
-                        if tx.get("type") == "credit" and "starter" not in str(tx.get("code", "")).lower()
-                    )
-                    diff = round(remote_total - local_redeemed_total, 2)
-                    if diff > 0:
-                        cur_bal = round(float(credits_data.get("balance", 0.0)), 2)
-                        new_bal = round(cur_bal + diff, 2)
-                        credits_data["balance"] = new_bal
-                        sync_txn = {
-                            "id": f"TXN-DASH-{secrets.randbelow(90000) + 10000}",
-                            "type": "credit",
-                            "amount": diff,
-                            "balance_after": new_bal,
-                            "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
-                            "code": "DASHBOARD-RECHARGE",
-                            "expiry_date": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d"),
-                            "description": "Credit Points Added via Dashboard",
-                            "user_name": current_state.get("profile_name", "User"),
-                            "user_email": current_state.get("profile_email", "user@example.com"),
-                            "user_phone": current_state.get("profile_phone", "N/A"),
-                        }
-                        if "transactions" not in credits_data:
-                            credits_data["transactions"] = []
-                        credits_data["transactions"].insert(0, sync_txn)
+                # 1. Primary Ledger-based sync: Sync any remote voucher codes assigned to this user that are not yet recorded locally
+                remote_codes = data.get("redeemed_codes")
+                credits_data = load_app_credits()
+                codes_applied = 0
+                if isinstance(remote_codes, list) and remote_codes:
+                    local_redeemed_set = set(credits_data.get("redeemed_codes", []))
+                    for rc in remote_codes:
+                        c_code = str(rc.get("code") or "").strip().upper()
+                        c_amt = float(rc.get("amount") or 0.0)
+                        if c_code and c_amt > 0 and c_code not in local_redeemed_set:
+                            cur_bal = round(float(credits_data.get("balance", 0.0)), 2)
+                            new_bal = round(cur_bal + c_amt, 2)
+                            credits_data["balance"] = new_bal
+                            if "redeemed_codes" not in credits_data:
+                                credits_data["redeemed_codes"] = []
+                            credits_data["redeemed_codes"].append(c_code)
+                            local_redeemed_set.add(c_code)
+
+                            sync_txn = {
+                                "id": f"TXN-DASH-{secrets.randbelow(90000) + 10000}",
+                                "type": "credit",
+                                "amount": c_amt,
+                                "balance_after": new_bal,
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                                "code": c_code,
+                                "expiry_date": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d"),
+                                "description": f"Credit Points Added via Dashboard ({c_code})",
+                                "user_name": current_state.get("profile_name", "User"),
+                                "user_email": current_state.get("profile_email", "user@example.com"),
+                                "user_phone": current_state.get("profile_phone", "N/A"),
+                            }
+                            if "transactions" not in credits_data:
+                                credits_data["transactions"] = []
+                            credits_data["transactions"].insert(0, sync_txn)
+                            codes_applied += 1
+                            logger.info(f"Synced dashboard voucher {c_code} (+{c_amt} pts). New balance: {new_bal}")
+
+                    if codes_applied > 0:
                         save_app_credits(credits_data)
-                        logger.info(f"Synced +{diff} credits from Central Dashboard! New balance: {new_bal}")
+                        logger.info(f"Applied {codes_applied} new dashboard vouchers. Final balance: {credits_data['balance']}")
+
+                # 2. Fallback gross sync if redeemed_codes is absent (legacy backend support)
+                if codes_applied == 0 and not remote_codes:
+                    remote_total = float(data.get("total_redeemed") or 0.0)
+                    if remote_total > 0:
+                        local_redeemed_total = sum(
+                            float(tx.get("amount", 0)) for tx in credits_data.get("transactions", [])
+                            if tx.get("type") == "credit" and "starter" not in str(tx.get("code", "")).lower()
+                        )
+                        diff = round(remote_total - local_redeemed_total, 2)
+                        if diff > 0:
+                            cur_bal = round(float(credits_data.get("balance", 0.0)), 2)
+                            new_bal = round(cur_bal + diff, 2)
+                            credits_data["balance"] = new_bal
+                            sync_txn = {
+                                "id": f"TXN-DASH-{secrets.randbelow(90000) + 10000}",
+                                "type": "credit",
+                                "amount": diff,
+                                "balance_after": new_bal,
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                                "code": "DASHBOARD-RECHARGE",
+                                "expiry_date": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d"),
+                                "description": "Credit Points Added via Dashboard",
+                                "user_name": current_state.get("profile_name", "User"),
+                                "user_email": current_state.get("profile_email", "user@example.com"),
+                                "user_phone": current_state.get("profile_phone", "N/A"),
+                            }
+                            if "transactions" not in credits_data:
+                                credits_data["transactions"] = []
+                            credits_data["transactions"].insert(0, sync_txn)
+                            save_app_credits(credits_data)
+                            logger.info(f"Synced +{diff} credits from Central Dashboard! New balance: {new_bal}")
 
                 return {
                     "status": "success",
