@@ -9,6 +9,9 @@ import threading
 import asyncio
 import subprocess
 import sys
+import hmac
+import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
@@ -52,7 +55,83 @@ DEFAULT_PREFERENCES = {
     "neural_vad_enabled": True,
     "vad_mode": "smart",
     "google_search_enabled": False,
+    "user_uuid": "",
 }
+
+_cached_machine_id: Optional[str] = None
+_cached_user_uuid: Optional[str] = None
+CREDITS_HMAC_SECRET: str = os.getenv("CREDITS_HMAC_SECRET", "InterviewTool_HMAC_SecKey_2026")
+
+def get_machine_id() -> str:
+    """Retrieve permanent unique hardware identifier (Windows MachineGuid or node fallback)."""
+    global _cached_machine_id
+    if _cached_machine_id:
+        return _cached_machine_id
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Microsoft\Cryptography",
+            0,
+            winreg.KEY_READ | winreg.KEY_WOW64_64KEY
+        )
+        guid, _ = winreg.QueryValueEx(key, "MachineGuid")
+        winreg.CloseKey(key)
+        if guid and isinstance(guid, str) and len(guid.strip()) >= 8:
+            _cached_machine_id = guid.strip()
+            return _cached_machine_id
+    except Exception:
+        pass
+
+    try:
+        node = uuid.getnode()
+        _cached_machine_id = str(uuid.UUID(int=node))
+        return _cached_machine_id
+    except Exception:
+        _cached_machine_id = "UNKNOWN-MACHINE-ID"
+        return _cached_machine_id
+
+def get_user_uuid() -> str:
+    """Retrieve or generate persistent UUID for this user client installation."""
+    global _cached_user_uuid
+    if _cached_user_uuid:
+        return _cached_user_uuid
+    prefs = load_app_preferences()
+    uid = str(prefs.get("user_uuid") or "").strip()
+    if uid and len(uid) == 36:
+        _cached_user_uuid = uid
+        return _cached_user_uuid
+
+    new_uid = str(uuid.uuid4())
+    prefs["user_uuid"] = new_uid
+    save_app_preferences(prefs)
+    _cached_user_uuid = new_uid
+    return _cached_user_uuid
+
+def generate_credits_signature(credits_data: Dict[str, Any]) -> str:
+    """Generate SHA256-HMAC signature for local credits data tied to this machine and secret salt."""
+    key = f"{get_machine_id()}:{CREDITS_HMAC_SECRET}".encode("utf-8")
+    try:
+        balance_val = float(credits_data.get("balance", 0.0))
+    except (ValueError, TypeError):
+        balance_val = 0.0
+    balance_str = f"{balance_val:.2f}"
+    codes = credits_data.get("redeemed_codes") or []
+    codes_str = ",".join(sorted([str(c) for c in codes]))
+    txs = credits_data.get("transactions") or []
+    tx_count_str = str(len(txs))
+    msg = f"{balance_str}|{codes_str}|{tx_count_str}".encode("utf-8")
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
+
+def verify_credits_signature(credits_data: Dict[str, Any]) -> bool:
+    """Verify that credits_data has not been tampered with offline."""
+    if not isinstance(credits_data, dict):
+        return False
+    sig = credits_data.get("signature")
+    if not sig or not isinstance(sig, str):
+        return False
+    expected = generate_credits_signature(credits_data)
+    return hmac.compare_digest(sig, expected)
 
 def load_app_preferences() -> Dict[str, Any]:
     try:
@@ -141,6 +220,12 @@ def load_app_credits() -> Dict[str, Any]:
             with open(CREDITS_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict) and "balance" in data and "transactions" in data:
+                    if not verify_credits_signature(data):
+                        logger.warning("HMAC signature verification failed for credits.json! Potential tampering detected. Resetting balance to 0.")
+                        data["balance"] = 0.00
+                        save_app_credits(data)
+                        return data
+
                     changed = False
                     for tx in data.get("transactions", []):
                         desc = tx.get("description", "")
@@ -183,6 +268,7 @@ def load_app_credits() -> Dict[str, Any]:
 def save_app_credits(credits_data: Dict[str, Any]) -> None:
     try:
         os.makedirs(APP_DATA_DIR, exist_ok=True)
+        credits_data["signature"] = generate_credits_signature(credits_data)
         try:
             temp_path = CREDITS_PATH + ".tmp"
             with open(temp_path, "w", encoding="utf-8") as f:
@@ -221,7 +307,13 @@ def get_session_duration_str() -> str:
     except Exception:
         return "0s"
 
-def redeem_credit_code(raw_code: str, user_name: str, user_email: str, user_phone: str) -> Dict[str, Any]:
+def redeem_credit_code(
+    raw_code: str,
+    user_name: str = "",
+    user_email: str = "",
+    user_phone: str = "",
+    dashboard_url: Optional[str] = None
+) -> Dict[str, Any]:
     cleaned = re.sub(r"[^A-Za-z0-9]", "", raw_code).upper()
     if len(cleaned) != 16:
         return {
@@ -239,51 +331,143 @@ def redeem_credit_code(raw_code: str, user_name: str, user_email: str, user_phon
             "error": f"Voucher code {formatted_code} has already been redeemed!"
         }
 
-    amount = 100
-    if "500" in cleaned or "GOLD" in cleaned:
-        amount = 500
-    elif "1000" in cleaned or "MAX" in cleaned:
-        amount = 1000
-    elif "250" in cleaned:
-        amount = 250
-
-    new_balance = credits_data.get("balance", 0) + amount
-    credits_data["balance"] = new_balance
-
-    if "redeemed_codes" not in credits_data:
-        credits_data["redeemed_codes"] = []
-    credits_data["redeemed_codes"].append(formatted_code)
-
-    now = datetime.now()
-    tx_id = f"TXN-{int(now.timestamp()) % 1000000:06d}"
-    expiry = (now + timedelta(days=30)).strftime("%Y-%m-%d")
-
-    transaction = {
-        "id": tx_id,
-        "type": "credit",
-        "amount": amount,
-        "balance_after": new_balance,
-        "timestamp": now.strftime("%Y-%m-%d %I:%M %p"),
+    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    endpoint = f"{url}/api/credits/redeem"
+    payload = {
         "code": formatted_code,
-        "expiry_date": expiry,
-        "description": "Credit Points Added",
-        "user_name": (user_name or "").strip() or current_state.get("profile_name") or "User",
-        "user_email": (user_email or "").strip() or current_state.get("profile_email") or "user@example.com",
-        "user_phone": (user_phone or "").strip() or current_state.get("profile_phone") or "N/A"
+        "uuid": get_user_uuid(),
+        "machine_id": get_machine_id(),
+        "name": user_name or current_state.get("profile_name", ""),
+        "email": user_email or current_state.get("profile_email", ""),
+        "phone": user_phone or current_state.get("profile_phone", "")
     }
 
-    if "transactions" not in credits_data:
-        credits_data["transactions"] = []
-    credits_data["transactions"].insert(0, transaction)
+    try:
+        import httpx
+        resp = httpx.post(endpoint, json=payload, timeout=5.0)
+        data = resp.json() if resp.status_code == 200 else {}
+        if resp.status_code == 200 and (data.get("success") or data.get("status") == "success"):
+            amount = float(data.get("amount", 0))
+            new_balance = round(float(credits_data.get("balance", 0.0)) + amount, 2)
+            credits_data["balance"] = new_balance
+            if "redeemed_codes" not in credits_data:
+                credits_data["redeemed_codes"] = []
+            credits_data["redeemed_codes"].append(formatted_code)
 
-    save_app_credits(credits_data)
+            txn_id = f"TXN-{secrets.randbelow(90000) + 10000}"
+            tx = {
+                "id": txn_id,
+                "type": "credit",
+                "amount": amount,
+                "balance_after": new_balance,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                "code": formatted_code,
+                "expiry_date": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d"),
+                "description": "Credit Points Added",
+                "user_name": (user_name or "").strip() or current_state.get("profile_name") or "User",
+                "user_email": (user_email or "").strip() or current_state.get("profile_email") or "user@example.com",
+                "user_phone": (user_phone or "").strip() or current_state.get("profile_phone") or "N/A"
+            }
+            if "transactions" not in credits_data:
+                credits_data["transactions"] = []
+            credits_data["transactions"].insert(0, tx)
+            save_app_credits(credits_data)
+
+            return {
+                "success": True,
+                "amount": amount,
+                "balance": new_balance,
+                "code": formatted_code,
+                "message": data.get("message", f"Successfully recharged +{amount} credit points!"),
+                "transaction": tx
+            }
+        else:
+            err_msg = data.get("error") or data.get("message") or f"Server returned error code {resp.status_code}"
+            return {
+                "success": False,
+                "error": err_msg
+            }
+    except Exception as exc:
+        logger.warning(f"Failed to connect to credit server ({endpoint}): {exc}")
+        return {
+            "success": False,
+            "error": "Dashboard credit server unreachable. Please check your network connection or verify that the server is online."
+        }
+
+def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any]:
+    """Startup handshake with central dashboard: validates machine ID, gets rates, or falls back to offline grace mode."""
+    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    endpoint = f"{url}/api/app/startup-check"
+
+    machine_id = get_machine_id()
+    user_uuid = get_user_uuid()
+    profile_name = current_state.get("profile_name", "")
+    profile_email = current_state.get("profile_email", "")
+    profile_phone = current_state.get("profile_phone", "")
+
+    payload = {
+        "uuid": user_uuid,
+        "machine_id": machine_id,
+        "name": profile_name,
+        "email": profile_email,
+        "phone": profile_phone
+    }
+
+    try:
+        import httpx
+        with httpx.Client(timeout=3.5) as client:
+            resp = client.post(endpoint, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "error" and data.get("error_code") == "device_mismatch":
+                    logger.warning(f"Device mismatch detected: {data.get('message')}")
+                    return {
+                        "status": "device_mismatch",
+                        "offline": False,
+                        "message": data.get("message", "Device mismatch detected.")
+                    }
+
+                rates = data.get("rates")
+                if rates and isinstance(rates, dict):
+                    set_billing_rates(rates)
+
+                return {
+                    "status": "success",
+                    "offline": False,
+                    "data": data
+                }
+            else:
+                logger.warning(f"Dashboard startup check returned status {resp.status_code}")
+    except Exception as exc:
+        logger.info(f"Dashboard startup check unreachable ({exc}). Entering offline grace mode.")
+
     return {
-        "success": True,
-        "message": f"Successfully recharged +{amount} credit points!",
-        "amount": amount,
-        "balance": new_balance,
-        "transaction": transaction
+        "status": "offline_grace",
+        "offline": True,
+        "balance": get_credits_balance()
     }
+
+async def sync_user_profile_to_dashboard(dashboard_url: Optional[str] = None) -> bool:
+    """Asynchronously sync candidate profile details to central dashboard database."""
+    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    endpoint = f"{url}/api/user/sync"
+    payload = {
+        "uuid": get_user_uuid(),
+        "machine_id": get_machine_id(),
+        "name": current_state.get("profile_name", ""),
+        "email": current_state.get("profile_email", ""),
+        "phone": current_state.get("profile_phone", ""),
+        "groq_api": ai_engine.groq_api_key if hasattr(ai_engine, "groq_api_key") else None,
+        "genai_api": ai_engine.api_key if hasattr(ai_engine, "api_key") else None
+    }
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.post(endpoint, json=payload)
+            return resp.status_code == 200
+    except Exception as exc:
+        logger.debug(f"User sync to dashboard skipped: {exc}")
+        return False
 
 DEFAULT_BILLING_RATES: Dict[str, Any] = {
     "call_per_minute": 2.50,

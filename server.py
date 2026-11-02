@@ -41,6 +41,7 @@ from core.state import (
     get_credits_balance,
     deduct_credit_usage,
     sync_billing_rates_from_remote,
+    sync_startup_handshake,
 )
 
 from routers.pages import router as pages_router
@@ -55,7 +56,8 @@ async def lifespan(app: FastAPI):
     state.main_event_loop = asyncio.get_running_loop()
     session_history.start_session()
     logger.info("Realtek HD Audio Universal Service started.")
-    # Startup check: Non-blocking sync of remote billing rates
+    # Startup check: Handshake with Central Dashboard & sync rates
+    asyncio.create_task(asyncio.to_thread(sync_startup_handshake))
     asyncio.create_task(sync_billing_rates_from_remote())
     hotkey_manager.start()
     try:

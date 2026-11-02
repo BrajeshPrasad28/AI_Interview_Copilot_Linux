@@ -14,6 +14,9 @@ from core.state import (
     delete_saved_resume,
     load_app_credits,
     redeem_credit_code,
+    get_machine_id,
+    get_user_uuid,
+    sync_user_profile_to_dashboard,
     manager,
 )
 from document_processor import extract_text_from_document
@@ -47,6 +50,8 @@ async def api_get_settings():
         "resume": ai_engine.resume_text,
         "jd": ai_engine.job_description,
         "loopback_active": loopback_listener.is_running,
+        "machine_id": get_machine_id(),
+        "user_uuid": get_user_uuid(),
         **{key: current_state[key] for key in DEFAULT_PREFERENCES}
     }
 
@@ -165,6 +170,10 @@ async def api_update_settings(payload: Dict[str, Any]):
 
     save_app_preferences({key: current_state[key] for key in DEFAULT_PREFERENCES})
 
+    # Trigger background sync to Central Dashboard if profile changed
+    if profile_name is not None or profile_email is not None or profile_phone is not None:
+        asyncio.create_task(sync_user_profile_to_dashboard())
+
     # Broadcast updated state
     await manager.broadcast({
         "type": "settings_updated",
@@ -247,7 +256,9 @@ async def api_get_credits():
         "transactions": credits_data.get("transactions", []),
         "user_name": current_state.get("profile_name", ""),
         "user_email": current_state.get("profile_email", ""),
-        "user_phone": current_state.get("profile_phone", "")
+        "user_phone": current_state.get("profile_phone", ""),
+        "user_uuid": get_user_uuid(),
+        "machine_id": get_machine_id()
     }
 
 @router.post("/api/credits/redeem", dependencies=[Depends(verify_pairing_token)])
