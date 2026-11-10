@@ -307,6 +307,11 @@ def get_session_duration_str() -> str:
     except Exception:
         return "0s"
 
+def _get_dashboard_headers() -> Dict[str, str]:
+    """Build authentication headers for Central Dashboard internal API requests."""
+    secret = os.getenv("DASHBOARD_APP_SECRET", "").strip()
+    return {"X-App-Secret": secret} if secret else {}
+
 def redeem_credit_code(
     raw_code: str,
     user_name: str = "",
@@ -342,10 +347,7 @@ def redeem_credit_code(
         "phone": user_phone or current_state.get("profile_phone", "")
     }
 
-    headers = {}
-    secret = os.getenv("DASHBOARD_APP_SECRET", "").strip()
-    if secret:
-        headers["X-App-Secret"] = secret
+    headers = _get_dashboard_headers()
 
     try:
         import httpx
@@ -418,10 +420,7 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
         "phone": profile_phone
     }
 
-    headers = {}
-    secret = os.getenv("DASHBOARD_APP_SECRET", "").strip()
-    if secret:
-        headers["X-App-Secret"] = secret
+    headers = _get_dashboard_headers()
 
     try:
         import httpx
@@ -557,10 +556,11 @@ async def sync_user_profile_to_dashboard(dashboard_url: Optional[str] = None) ->
         "groq_api": ai_engine.groq_api_key if hasattr(ai_engine, "groq_api_key") else None,
         "genai_api": ai_engine.api_key if hasattr(ai_engine, "api_key") else None
     }
+    headers = _get_dashboard_headers()
     try:
         import httpx
         async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.post(endpoint, json=payload)
+            resp = await client.post(endpoint, json=payload, headers=headers)
             return resp.status_code == 200
     except Exception as exc:
         logger.debug(f"User sync to dashboard skipped: {exc}")

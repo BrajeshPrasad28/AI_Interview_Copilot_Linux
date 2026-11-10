@@ -275,5 +275,22 @@ class TestDashboardIntegration(unittest.TestCase):
         # Balance must remain exactly 600.00 (not 700.00)
         self.assertEqual(loaded["balance"], 600.00)
 
+    def test_sync_user_profile_sends_app_secret_header(self):
+        """User profile sync sends X-App-Secret header when configured."""
+        import asyncio
+        from unittest.mock import AsyncMock
+        from core.state import sync_user_profile_to_dashboard
+
+        mock_post = AsyncMock(return_value=MagicMock(status_code=200))
+        with patch.dict(os.environ, {"DASHBOARD_APP_SECRET": "secure-app-secret-test-123"}):
+            with patch("httpx.AsyncClient.post", mock_post):
+                ok = asyncio.run(sync_user_profile_to_dashboard(dashboard_url="http://localhost:5000"))
+
+        self.assertTrue(ok)
+        self.assertTrue(mock_post.called)
+        called_kwargs = mock_post.call_args[1]
+        self.assertIn("headers", called_kwargs)
+        self.assertEqual(called_kwargs["headers"].get("X-App-Secret"), "secure-app-secret-test-123")
+
 if __name__ == "__main__":
     unittest.main()
