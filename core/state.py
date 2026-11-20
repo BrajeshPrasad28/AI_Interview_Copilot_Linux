@@ -234,7 +234,7 @@ def load_app_credits() -> Dict[str, Any]:
                                 tx["description"] = "Credit Points Added"
                                 changed = True
                         elif tx.get("type") == "debit":
-                            if "voucher" in desc.lower() or "ai q" in desc.lower() or "(" in desc:
+                            if ("voucher" in desc.lower() or "ai q" in desc.lower() or "(" in desc) and "copilot session" not in desc.lower():
                                 tx["description"] = "Credit Points Used"
                                 changed = True
                     if changed:
@@ -629,7 +629,8 @@ def deduct_credit_usage(
     description: str = "",
     duration: str = "",
     total_snaps: int = 0,
-    count: int = 0
+    count: int = 0,
+    session_id: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     credits_data = load_app_credits()
     cur_bal = round(float(credits_data.get("balance", 0.0)), 2)
@@ -640,6 +641,30 @@ def deduct_credit_usage(
     now = datetime.now()
     tx_id = f"TXN-{int(now.timestamp()) % 1000000:06d}"
 
+    # Check if this active session already has a transaction in history
+    existing_tx = None
+    if session_id and "transactions" in credits_data:
+        for tx in credits_data["transactions"]:
+            if tx.get("session_id") == session_id:
+                existing_tx = tx
+                break
+
+    if existing_tx:
+        # In-place update of existing session transaction to avoid cluttering history
+        existing_tx["amount"] = round(float(existing_tx.get("amount", 0.0)) - amount_float, 2)
+        existing_tx["balance_after"] = new_bal
+        existing_tx["timestamp"] = now.strftime("%Y-%m-%d %I:%M %p")
+        if duration:
+            existing_tx["duration"] = duration
+        if total_snaps is not None:
+            existing_tx["total_snaps"] = total_snaps
+        if count is not None:
+            existing_tx["count"] = count
+        if description and not existing_tx.get("finalized"):
+            existing_tx["description"] = description
+        save_app_credits(credits_data)
+        return existing_tx
+
     transaction = {
         "id": tx_id,
         "type": "debit",
@@ -648,10 +673,11 @@ def deduct_credit_usage(
         "timestamp": now.strftime("%Y-%m-%d %I:%M %p"),
         "code": "",
         "expiry_date": "",
-        "description": description or "Credit Points Used",
+        "description": description or ("Copilot Session (In Progress)" if session_id else "Credit Points Used"),
         "duration": duration or "N/A",
         "total_snaps": total_snaps,
         "count": count,
+        "session_id": session_id,
         "user_name": (user_name or "").strip() or current_state.get("profile_name") or "User",
         "user_email": (user_email or "").strip() or current_state.get("profile_email") or "user@example.com",
         "user_phone": (user_phone or "").strip() or current_state.get("profile_phone") or "N/A"
@@ -663,6 +689,39 @@ def deduct_credit_usage(
 
     save_app_credits(credits_data)
     return transaction
+
+
+def finalize_session_transaction(
+    session_id: str,
+    duration: Optional[str] = None,
+    total_snaps: Optional[int] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Finalize an active session's consolidated transaction upon call completion.
+    Formats description cleanly: 'Copilot Session (<duration>, <total_snaps> snaps)'.
+    """
+    if not session_id:
+        return None
+    credits_data = load_app_credits()
+    target_tx = None
+    if "transactions" in credits_data:
+        for tx in credits_data["transactions"]:
+            if tx.get("session_id") == session_id:
+                target_tx = tx
+                break
+    if not target_tx:
+        return None
+
+    dur = duration or target_tx.get("duration", "1m")
+    snaps = total_snaps if total_snaps is not None else target_tx.get("total_snaps", 0)
+    target_tx["duration"] = dur
+    target_tx["total_snaps"] = snaps
+    target_tx["description"] = f"Copilot Session ({dur}, {snaps} snaps)"
+    target_tx["finalized"] = True
+    target_tx["timestamp"] = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+    save_app_credits(credits_data)
+    return target_tx
+
 
 async def _call_billing_ticker():
     """Background ticker that deducts call_per_minute at every 60s boundary and terminates if insufficient."""
@@ -676,12 +735,20 @@ async def _call_billing_ticker():
             minute_counter += 1
             call_rate = get_billing_rate("call_per_minute")
             current_bal = get_credits_balance()
+            active_session_id = copilot_session_state.get("session_id")
 
             if current_bal < call_rate:
                 logger.warning(f"Balance {current_bal} is insufficient for minute {minute_counter} ({call_rate}). Terminating call.")
                 session_history.end_session()
                 copilot_session_state["is_active"] = False
                 copilot_session_state["started_at"] = None
+                if active_session_id:
+                    finalize_session_transaction(
+                        active_session_id,
+                        duration=f"{minute_counter - 1}m",
+                        total_snaps=session_metrics.get("total_snaps", 0)
+                    )
+                copilot_session_state["session_id"] = None
                 await manager.broadcast({
                     "type": "copilot_ended",
                     "reason": "insufficient_credits",
@@ -689,16 +756,17 @@ async def _call_billing_ticker():
                 })
                 break
 
-            # Deduct for this minute block
+            # Deduct for this minute block - consolidated into existing session card
             tx = deduct_credit_usage(
                 amount=call_rate,
-                description=f"Call Minute {minute_counter} (-{call_rate:.2f} pts)",
+                description="Copilot Session (In Progress)",
                 user_name=current_state.get("profile_name", ""),
                 user_email=current_state.get("profile_email", ""),
                 user_phone=current_state.get("profile_phone", ""),
                 duration=f"{minute_counter}m",
                 total_snaps=session_metrics.get("total_snaps", 0),
-                count=session_metrics.get("qa_count", 0)
+                count=session_metrics.get("qa_count", 0),
+                session_id=active_session_id
             )
             if tx:
                 await manager.broadcast({
@@ -1065,6 +1133,7 @@ saved_resume_filename = saved_resume_data.get("filename", "")
 copilot_session_state: Dict[str, Any] = {
     "is_active": False,
     "started_at": None,
+    "session_id": None,
 }
 
 # Mobile Companion Connection State

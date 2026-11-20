@@ -40,6 +40,8 @@ from core.state import (
     get_billing_rate,
     get_credits_balance,
     deduct_credit_usage,
+    finalize_session_transaction,
+    stop_call_billing_ticker,
     sync_billing_rates_from_remote,
     sync_startup_handshake,
 )
@@ -213,22 +215,25 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                     record_session_qa(result, data.get("prompt") or "Screen question (screenshot)")
                     
-                    # Deduct snap credits
-                    tx = deduct_credit_usage(
-                        amount=snap_rate,
-                        description=f"Screen Snap Solution (-{snap_rate:.2f} pts)",
-                        user_name=current_state.get("profile_name", ""),
-                        user_email=current_state.get("profile_email", ""),
-                        user_phone=current_state.get("profile_phone", ""),
-                        total_snaps=session_metrics.get("total_snaps", 1),
-                        count=session_metrics.get("qa_count", 0)
-                    )
-                    if tx:
-                        await manager.broadcast({
-                            "type": "credits_updated",
-                            "balance": tx["balance_after"],
-                            "transaction": tx
-                        })
+                    # Deduct snap credits only on successful analysis
+                    if result.get("success"):
+                        active_session_id = copilot_session_state.get("session_id") if copilot_session_state.get("is_active") else None
+                        tx = deduct_credit_usage(
+                            amount=snap_rate,
+                            description=f"Screen Snap Solution (-{snap_rate:.2f} pts)",
+                            user_name=current_state.get("profile_name", ""),
+                            user_email=current_state.get("profile_email", ""),
+                            user_phone=current_state.get("profile_phone", ""),
+                            total_snaps=session_metrics.get("total_snaps", 1),
+                            count=session_metrics.get("qa_count", 0),
+                            session_id=active_session_id
+                        )
+                        if tx:
+                            await manager.broadcast({
+                                "type": "credits_updated",
+                                "balance": tx["balance_after"],
+                                "transaction": tx
+                            })
 
                     await manager.broadcast({
                         "type": "new_answer",
@@ -290,9 +295,23 @@ async def api_disconnect_companion():
 async def api_takeover_companion():
     # 1. Stop any active copilot session that was running
     if copilot_session_state.get("is_active"):
+        session_id = copilot_session_state.get("session_id")
+        started_at = copilot_session_state.get("started_at")
+        stop_call_billing_ticker()
         session_history.end_session()
         copilot_session_state["is_active"] = False
         copilot_session_state["started_at"] = None
+        copilot_session_state["session_id"] = None
+        if session_id:
+            elapsed_min = 1
+            if started_at:
+                elapsed_sec = max(0, int((datetime.now(timezone.utc).timestamp() * 1000 - started_at) / 1000))
+                elapsed_min = max(1, (elapsed_sec + 59) // 60)
+            finalize_session_transaction(
+                session_id,
+                duration=f"{elapsed_min}m",
+                total_snaps=session_metrics.get("total_snaps", 0)
+            )
         await manager.broadcast({
             "type": "copilot_ended"
         })

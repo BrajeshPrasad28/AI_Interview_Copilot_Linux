@@ -109,11 +109,66 @@ class InterviewAIEngine:
 
         try:
             from google import genai
-            self.client = genai.Client(api_key=self.api_key, http_options={"timeout": 10000})
-            logger.info("Google GenAI client initialized with 10s timeout.")
+            self.client = genai.Client(api_key=self.api_key, http_options={"timeout": 30000})
+            logger.info("Google GenAI client initialized with 30s timeout.")
         except Exception as e:
             logger.error(f"Failed to initialize Gemini client: {e}")
             self.client = None
+
+    @staticmethod
+    def sanitize_error(raw_error: str, context: str = "Analysis") -> str:
+        """
+        Convert technical AI exception traces, status codes, and JSON dumps into
+        clean, user-friendly messages without technical jargon or brand leaks.
+        """
+        err_str = str(raw_error or "").strip()
+        if not err_str:
+            return f"{context} failed. Please try again."
+
+        lower_err = err_str.lower()
+
+        # 1. 504 / DEADLINE_EXCEEDED / Timeout
+        if "504" in err_str or "deadline_exceeded" in lower_err or "timed out" in lower_err or "timeout" in lower_err:
+            return "Analysis timed out. The AI model took too long to process the screen. Please try again or snip a specific question region."
+
+        # 2. 429 / RESOURCE_EXHAUSTED / Quota
+        if "429" in err_str or "resource_exhausted" in lower_err or "quota" in lower_err:
+            return "Quota exceeded. Please wait a few moments before trying again."
+
+        # 3. 503 / UNAVAILABLE / Overloaded
+        if "503" in err_str or "unavailable" in lower_err or "overloaded" in lower_err:
+            return "AI service is temporarily overloaded. Please retry in a few seconds."
+
+        # 4. 401 / 403 / API_KEY_INVALID / PERMISSION_DENIED
+        if (
+            "api_key_invalid" in lower_err
+            or "permission_denied" in lower_err
+            or "api key not valid" in lower_err
+            or "401" in err_str
+            or "403" in err_str
+            or "unauthorized" in lower_err
+        ):
+            return "API key is invalid or unauthorized. Please connect admin."
+
+        # 5. Connection / Network errors
+        if any(term in lower_err for term in ["connecterror", "getaddrinfo", "connection refused", "network unreachable", "failed to connect"]):
+            return "Unable to connect to Copilot. Please check your internet connection."
+
+        # 6. JSON dictionary stripping fallback: extract 'message' if present
+        json_msg_match = re.search(r"['\"]message['\"]\s*:\s*['\"]([^'\"]+)['\"]", err_str)
+        if json_msg_match:
+            clean_msg = json_msg_match.group(1).strip()
+            clean_msg = re.sub(r"\b(Google\s*Gemini|Gemini|Groq)\b", "AI", clean_msg, flags=re.IGNORECASE)
+            return clean_msg
+
+        # Remove raw dict structures like {...} or stack traces
+        cleaned = re.sub(r"\{.*?\}", "", err_str).strip()
+        cleaned = re.sub(r"\b(Google\s*Gemini|Gemini|Groq)\b", "AI", cleaned, flags=re.IGNORECASE).strip()
+        cleaned = cleaned.rstrip(":.- ")
+        if cleaned:
+            return f"{cleaned}."
+
+        return f"{context} failed. Please try again."
 
     def initialize_groq(self):
         """Initialize Groq client."""
@@ -441,11 +496,11 @@ class InterviewAIEngine:
             if not self.api_key:
                 return {
                     "success": False,
-                    "error": "Gemini API Key missing for Screen Snip vision analysis. Please set your key in Settings."
+                    "error": "API key is invalid or unauthorized. Please connect admin."
                 }
             self.initialize_gemini()
             if not self.client:
-                return {"success": False, "error": "Could not connect to Gemini Vision API."}
+                return {"success": False, "error": "Unable to connect to Copilot. Please check your internet connection."}
 
         system_instruction = self._build_system_instruction(mode)
         candidate_models = [self.gemini_primary_model] + [m for m in self.gemini_fallback_models if m != self.gemini_primary_model]
@@ -494,7 +549,7 @@ class InterviewAIEngine:
                 logger.warning(f"Vision model {model} failed: {e}. Trying fallback...")
                 last_error = str(e)
 
-        return {"success": False, "error": f"Vision Analysis Error: {last_error}"}
+        return {"success": False, "error": self.sanitize_error(last_error, "Vision Analysis")}
 
     def solve_audio(self, audio_bytes: bytes, mime_type: str = "audio/wav", mode: str = "coding", speaker: str = "Interviewer") -> Dict[str, Any]:
         """

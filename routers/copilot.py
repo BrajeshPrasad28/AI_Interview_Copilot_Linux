@@ -119,22 +119,25 @@ async def api_trigger_snip(payload: Optional[Dict[str, Any]] = None):
     result = await asyncio.to_thread(ai_engine.solve_screen_snip, img_bytes, user_prompt=prompt, mode=mode)
     record_session_qa(result, prompt or "Screen question (screenshot)")
 
-    # Deduct snap_per_count on successful solve
-    tx = deduct_credit_usage(
-        amount=snap_rate,
-        description=f"Screen Snap Solution (-{snap_rate:.2f} pts)",
-        user_name=current_state.get("profile_name", ""),
-        user_email=current_state.get("profile_email", ""),
-        user_phone=current_state.get("profile_phone", ""),
-        total_snaps=session_metrics.get("total_snaps", 1),
-        count=session_metrics.get("qa_count", 0)
-    )
-    if tx:
-        await manager.broadcast({
-            "type": "credits_updated",
-            "balance": tx["balance_after"],
-            "transaction": tx
-        })
+    # Deduct snap_per_count only on successful solve
+    if result.get("success"):
+        active_session_id = copilot_session_state.get("session_id") if copilot_session_state.get("is_active") else None
+        tx = deduct_credit_usage(
+            amount=snap_rate,
+            description=f"Screen Snap Solution (-{snap_rate:.2f} pts)",
+            user_name=current_state.get("profile_name", ""),
+            user_email=current_state.get("profile_email", ""),
+            user_phone=current_state.get("profile_phone", ""),
+            total_snaps=session_metrics.get("total_snaps", 1),
+            count=session_metrics.get("qa_count", 0),
+            session_id=active_session_id
+        )
+        if tx:
+            await manager.broadcast({
+                "type": "credits_updated",
+                "balance": tx["balance_after"],
+                "transaction": tx
+            })
 
     await manager.broadcast({
         "type": "new_answer",

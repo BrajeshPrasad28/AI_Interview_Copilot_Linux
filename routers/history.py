@@ -6,12 +6,14 @@ from core.state import (
     verify_pairing_token,
     session_history,
     reset_session_metrics,
+    session_metrics,
     copilot_session_state,
     companion_state,
     manager,
     get_billing_rate,
     get_credits_balance,
     deduct_credit_usage,
+    finalize_session_transaction,
     start_call_billing_ticker,
     stop_call_billing_ticker,
     current_state,
@@ -49,16 +51,25 @@ async def api_start_session_history(request: Request):
             detail=f"Insufficient credit points to start Copilot session. ({current_balance:.2f} available, {call_rate:.2f} points required for 1 min call)."
         )
 
-    # Upfront deduction for minute 1
+    session_history.start_session()
+    reset_session_metrics()
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    session_id = f"ses_{now_ms}"
+    copilot_session_state["is_active"] = True
+    copilot_session_state["started_at"] = now_ms
+    copilot_session_state["session_id"] = session_id
+
+    # Upfront deduction for minute 1 - creates the single session transaction
     tx = deduct_credit_usage(
         amount=call_rate,
-        description=f"Call Minute 1 (-{call_rate:.2f} pts)",
+        description="Copilot Session (In Progress)",
         user_name=current_state.get("profile_name", ""),
         user_email=current_state.get("profile_email", ""),
         user_phone=current_state.get("profile_phone", ""),
         duration="1m",
         total_snaps=0,
-        count=0
+        count=0,
+        session_id=session_id
     )
     if tx:
         await manager.broadcast({
@@ -66,12 +77,6 @@ async def api_start_session_history(request: Request):
             "balance": tx["balance_after"],
             "transaction": tx
         })
-
-    session_history.start_session()
-    reset_session_metrics()
-    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-    copilot_session_state["is_active"] = True
-    copilot_session_state["started_at"] = now_ms
 
     # Start live 60-second background billing ticker
     start_call_billing_ticker()
@@ -85,10 +90,31 @@ async def api_start_session_history(request: Request):
 
 @router.post("/session/end", dependencies=[Depends(verify_pairing_token)])
 async def api_end_session_history():
+    session_id = copilot_session_state.get("session_id")
+    started_at = copilot_session_state.get("started_at")
     stop_call_billing_ticker()
     session_history.end_session()
     copilot_session_state["is_active"] = False
     copilot_session_state["started_at"] = None
+    copilot_session_state["session_id"] = None
+
+    if session_id:
+        elapsed_min = 1
+        if started_at:
+            elapsed_sec = max(0, int((datetime.now(timezone.utc).timestamp() * 1000 - started_at) / 1000))
+            elapsed_min = max(1, (elapsed_sec + 59) // 60)
+        final_tx = finalize_session_transaction(
+            session_id,
+            duration=f"{elapsed_min}m",
+            total_snaps=session_metrics.get("total_snaps", 0)
+        )
+        if final_tx:
+            await manager.broadcast({
+                "type": "credits_updated",
+                "balance": final_tx["balance_after"],
+                "transaction": final_tx
+            })
+
     await manager.broadcast({
         "type": "copilot_ended"
     })
