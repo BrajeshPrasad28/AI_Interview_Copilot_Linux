@@ -1,5 +1,9 @@
 import os
+import sys
 import tempfile
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 _test_dir = tempfile.mkdtemp(prefix="test_interview_tool_")
 os.environ["INTERVIEW_TOOL_DATA_DIR"] = _test_dir
 
