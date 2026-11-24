@@ -694,6 +694,7 @@ DEFAULT_BILLING_RATES: Dict[str, Any] = {
     "snap_per_count": 5.00,
     "note_per_count": 2.00,
     "note_max_chars": 500,
+    "referral_reward": 10.00,
 }
 
 current_billing_rates: Dict[str, Any] = DEFAULT_BILLING_RATES.copy()
@@ -744,6 +745,100 @@ def get_credits_balance() -> float:
     except Exception:
         return 0.0
 
+
+def sync_usage_balance_to_dashboard(transaction: Dict[str, Any], balance: float, dashboard_url: Optional[str] = None) -> bool:
+    """Synchronize local deduction transaction and updated balance to central dashboard."""
+    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    endpoint = f"{url}/api/user/sync-balance"
+    payload = {
+        "uuid": get_user_uuid(),
+        "machine_id": get_machine_id(),
+        "balance": balance,
+        "transaction": transaction
+    }
+    headers = _get_dashboard_headers()
+    try:
+        import httpx
+        with httpx.Client(timeout=3.0) as client:
+            resp = client.post(endpoint, json=payload, headers=headers)
+            return resp.status_code == 200
+    except Exception as exc:
+        logger.debug(f"Could not sync usage balance to dashboard: {exc}")
+        return False
+
+
+def lookup_and_restore_user_account(email: str, dashboard_url: Optional[str] = None) -> Dict[str, Any]:
+    """Look up registered user account by email and restore UUID, balance, and transaction history."""
+    cleaned_email = (email or "").strip().lower()
+    if not cleaned_email:
+        return {"success": False, "found": False, "error": "Email is required."}
+
+    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    endpoint = f"{url}/api/user/restore"
+    payload = {
+        "email": cleaned_email,
+        "machine_id": get_machine_id()
+    }
+    headers = _get_dashboard_headers()
+    try:
+        import httpx
+        with httpx.Client(timeout=4.0) as client:
+            resp = client.post(endpoint, json=payload, headers=headers)
+            if resp.status_code == 403:
+                err = resp.json().get("message", "Device binding mismatch.")
+                return {"success": False, "found": True, "error": err}
+            if resp.status_code == 200:
+                data = resp.json()
+                if not data.get("found"):
+                    return {"success": True, "found": False}
+
+                user_data = data.get("user") or {}
+                remote_uuid = user_data.get("uuid")
+                if remote_uuid:
+                    global _cached_user_uuid
+                    _cached_user_uuid = remote_uuid
+                    prefs = load_app_preferences()
+                    prefs["user_uuid"] = remote_uuid
+                    if user_data.get("name"):
+                        prefs["profile_name"] = user_data["name"]
+                        current_state["profile_name"] = user_data["name"]
+                    if user_data.get("phone"):
+                        prefs["profile_phone"] = user_data["phone"]
+                        current_state["profile_phone"] = user_data["phone"]
+                    prefs["profile_email"] = cleaned_email
+                    current_state["profile_email"] = cleaned_email
+                    save_app_preferences(prefs)
+
+                # Restore credits & transactions
+                credits_data = load_app_credits()
+                restored_balance = float(user_data.get("current_balance", credits_data.get("balance", 0.0)))
+                credits_data["balance"] = restored_balance
+                if user_data.get("referral_code"):
+                    credits_data["referral_code"] = user_data["referral_code"]
+                    current_state["referral_code"] = user_data["referral_code"]
+                if "has_redeemed_referral" in user_data:
+                    credits_data["has_redeemed_referral"] = bool(user_data["has_redeemed_referral"])
+
+                remote_txs = data.get("transactions") or []
+                if remote_txs:
+                    existing_ids = {tx.get("id") for tx in credits_data.get("transactions", []) if tx.get("id")}
+                    merged_txs = list(credits_data.get("transactions", []))
+                    for r_tx in remote_txs:
+                        if r_tx.get("id") not in existing_ids:
+                            merged_txs.append(r_tx)
+                            existing_ids.add(r_tx.get("id"))
+                    credits_data["transactions"] = merged_txs
+
+                save_app_credits(credits_data)
+                logger.info(f"User account restored successfully for {cleaned_email}! Restored balance: {restored_balance}")
+                return {"success": True, "found": True, "user": user_data, "transactions": credits_data.get("transactions", [])}
+    except Exception as exc:
+        logger.warning(f"Error restoring user account ({endpoint}): {exc}")
+        return {"success": False, "found": False, "error": f"Server unreachable: {exc}"}
+
+    return {"success": False, "found": False, "error": "Could not restore user account."}
+
+
 def deduct_credit_usage(
     amount: float,
     user_name: str,
@@ -786,6 +881,10 @@ def deduct_credit_usage(
         if description and not existing_tx.get("finalized"):
             existing_tx["description"] = description
         save_app_credits(credits_data)
+        try:
+            threading.Thread(target=sync_usage_balance_to_dashboard, args=(existing_tx, new_bal), daemon=True).start()
+        except Exception:
+            pass
         return existing_tx
 
     transaction = {
@@ -811,6 +910,10 @@ def deduct_credit_usage(
     credits_data["transactions"].insert(0, transaction)
 
     save_app_credits(credits_data)
+    try:
+        threading.Thread(target=sync_usage_balance_to_dashboard, args=(transaction, new_bal), daemon=True).start()
+    except Exception:
+        pass
     return transaction
 
 

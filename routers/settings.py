@@ -16,6 +16,8 @@ from core.state import (
     load_app_credits,
     redeem_credit_code,
     redeem_referral_code,
+    lookup_and_restore_user_account,
+    get_billing_rate,
     get_machine_id,
     get_user_uuid,
     sync_user_profile_to_dashboard,
@@ -268,7 +270,8 @@ async def api_get_credits():
         "machine_id": get_machine_id(),
         "referral_code": ref_code,
         "has_redeemed_referral": bool(credits_data.get("has_redeemed_referral", False)),
-        "applied_referral_code": credits_data.get("applied_referral_code", "")
+        "applied_referral_code": credits_data.get("applied_referral_code", ""),
+        "referral_reward": get_billing_rate("referral_reward")
     }
 
 @router.post("/api/credits/redeem", dependencies=[Depends(verify_pairing_token)])
@@ -314,4 +317,25 @@ async def api_redeem_referral(payload: Dict[str, Any]):
         "transaction": res.get("transaction"),
         "has_redeemed_referral": True
     })
+    return res
+
+@router.post("/api/user/restore", dependencies=[Depends(verify_pairing_token)])
+async def api_user_restore(payload: Dict[str, Any]):
+    email = str(payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required.")
+    res = lookup_and_restore_user_account(email)
+    if not res.get("success") and res.get("error"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    if res.get("found"):
+        await manager.broadcast({
+            "type": "settings_updated",
+            "profile_name": current_state.get("profile_name", ""),
+            "profile_email": current_state.get("profile_email", ""),
+            "profile_phone": current_state.get("profile_phone", "")
+        })
+        await manager.broadcast({
+            "type": "credits_updated",
+            "balance": res.get("user", {}).get("current_balance", 0.0)
+        })
     return res

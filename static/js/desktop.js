@@ -837,6 +837,13 @@
                     if (refClaimedBadge) refClaimedBadge.style.display = 'none';
                 }
 
+                if (data.referral_reward) {
+                    const refPtsEl = document.getElementById('referral-reward-pts');
+                    if (refPtsEl) refPtsEl.textContent = parseInt(data.referral_reward, 10);
+                    const refClaimedPtsEl = document.getElementById('referral-claimed-pts');
+                    if (refClaimedPtsEl) refClaimedPtsEl.textContent = parseInt(data.referral_reward, 10);
+                }
+
                 const txs = data.transactions || [];
                 renderCreditTransactions(txs, currentCreditFilter);
             } catch (err) {
@@ -1094,9 +1101,39 @@
                         queuePreferenceSave('profile_email', emailEl.value.trim());
                     }
                 });
-                emailEl.addEventListener('blur', () => {
+                emailEl.addEventListener('blur', async () => {
                     const v = validateEmailAddress(emailEl.value);
                     setValidationUI('email', v.valid, v.error);
+                    if (v.valid) {
+                        const emailVal = emailEl.value.trim();
+                        try {
+                            const res = await fetch('/api/user/restore', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-Pairing-Token': pairingToken },
+                                body: JSON.stringify({ email: emailVal })
+                            });
+                            if (res.ok) {
+                                const data = await res.json();
+                                if (data.found && data.user) {
+                                    const u = data.user;
+                                    if (u.name && (!nameEl.value || nameEl.value.trim() === '')) {
+                                        nameEl.value = u.name;
+                                        applyPreference('profile_name', u.name);
+                                        setValidationUI('name', true, '');
+                                    }
+                                    if (u.phone && (!phoneEl.value || phoneEl.value.trim() === '')) {
+                                        phoneEl.value = u.phone;
+                                        applyPreference('profile_phone', u.phone);
+                                        setValidationUI('phone', true, '');
+                                    }
+                                    showStealthToast(`Welcome back, ${u.name || 'User'}! Account & history restored.`);
+                                    await loadCreditsData();
+                                }
+                            }
+                        } catch (e) {
+                            // Offline or network error: continue locally
+                        }
+                    }
                 });
             }
 

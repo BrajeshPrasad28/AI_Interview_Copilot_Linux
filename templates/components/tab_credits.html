@@ -1,115 +1,116 @@
-                <section id="credits-view" class="profile-settings-view" aria-labelledby="credits-title">
-                    <div class="profile-settings-panel">
-                        <div class="profile-settings-header"
-                            style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-                            <div>
-                                <h2 id="credits-title">Credit &amp; History</h2>
-                            </div>
-                            <button type="button" class="btn-icon-only" onclick="loadCreditsData()" title="Refresh" aria-label="Refresh">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                                </svg>
-                            </button>
-                        </div>
+<section id="credits-view" class="profile-settings-view" aria-labelledby="credits-title">
+    <div class="profile-settings-panel">
+        <div class="profile-settings-header"
+            style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div>
+                <h2 id="credits-title">Credit &amp; History</h2>
+            </div>
+            <button type="button" class="btn-icon-only" onclick="loadCreditsData()" title="Refresh"
+                aria-label="Refresh">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                </svg>
+            </button>
+        </div>
 
-                        <!-- Unified 2-Column Overview & Redeem Card -->
-                        <div class="credit-overview-card">
-                            <!-- Column 1: Available Credit Points & Account Info -->
-                            <div class="credit-col-balance">
-                                <span class="credit-balance-label">Available Credit Points</span>
-                                <div class="credit-balance-val-row">
-                                    <span id="credit-balance-value" class="credit-balance-val">100.00</span>
-                                    <span class="credit-balance-unit">Points</span>
-                                </div>
-                                <div class="credit-user-info-row">
-                                    <span class="credit-account-dot"></span>
-                                    <span>Account: <strong id="credit-user-name">User</strong></span>
-                                    <span id="credit-user-email-wrap" style="color: var(--text-secondary);">(<span
-                                            id="credit-user-email">user@example.com</span>)</span>
-                                </div>
-                            </div>
+        <!-- Unified 2-Column Overview & Redeem Card -->
+        <div class="credit-overview-card">
+            <!-- Column 1: Available Credit Points & Account Info -->
+            <div class="credit-col-balance">
+                <span class="credit-balance-label">Available Credit Points</span>
+                <div class="credit-balance-val-row">
+                    <span id="credit-balance-value" class="credit-balance-val">100.00</span>
+                    <span class="credit-balance-unit">Points</span>
+                </div>
+                <div class="credit-user-info-row">
+                    <span class="credit-account-dot"></span>
+                    <span>Account: <strong id="credit-user-name">User</strong></span>
+                    <span id="credit-user-email-wrap" style="color: var(--text-secondary);">(<span
+                            id="credit-user-email">user@example.com</span>)</span>
+                </div>
+            </div>
 
-                            <!-- Column 2: Voucher Input Box & Redeem Button -->
-                            <div class="credit-col-redeem">
-                                <div class="credit-redeem-header">
-                                    <span class="credit-redeem-title">Enter your Credit Code</span>
-                                </div>
-                                <div class="credit-input-group">
-                                    <input type="text" id="credit-code-input" class="credit-code-input"
-                                        placeholder="XXXX - XXXX - XXXX - XXXX" maxlength="19" autocomplete="off"
-                                        spellcheck="false" oninput="formatCreditCodeInput(this)"
-                                        onkeydown="if(event.key==='Enter') redeemCreditCode()">
-                                    <button type="button" class="btn-action btn-redeem" id="btn-redeem"
-                                        onclick="redeemCreditCode()">
-                                        Redeem
-                                    </button>
-                                </div>
-                                <div id="credit-redeem-status" class="credit-redeem-status" style="display: none;"></div>
-                            </div>
-                        </div>
+            <!-- Column 2: Voucher Input Box & Redeem Button -->
+            <div class="credit-col-redeem">
+                <div class="credit-redeem-header">
+                    <span class="credit-redeem-title">Enter your Credit Code</span>
+                </div>
+                <div class="credit-input-group">
+                    <input type="text" id="credit-code-input" class="credit-code-input"
+                        placeholder="XXXX - XXXX - XXXX - XXXX" maxlength="19" autocomplete="off" spellcheck="false"
+                        oninput="formatCreditCodeInput(this)" onkeydown="if(event.key==='Enter') redeemCreditCode()">
+                    <button type="button" class="btn-action btn-redeem" id="btn-redeem" onclick="redeemCreditCode()">
+                        Redeem
+                    </button>
+                </div>
+                <div id="credit-redeem-status" class="credit-redeem-status" style="display: none;"></div>
+            </div>
+        </div>
 
-                        <!-- 2. Refer & Earn Section -->
-                        <div class="credit-referral-card">
-                            <!-- Left: Your Static Referral Code -->
-                            <div class="referral-col-code">
-                                <div class="referral-header-row">
-                                    <span class="referral-badge-pill">🎁 Refer &amp; Earn</span>
-                                    <span class="referral-subtext">Share with friends — both get +10 credits!</span>
-                                </div>
-                                <div class="referral-box-row">
-                                    <div class="referral-code-display" id="my-referral-code">REF-......</div>
-                                    <button type="button" class="btn-action btn-copy-referral" id="btn-copy-ref" onclick="copyReferralCode()" title="Copy referral code">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                        </svg>
-                                        <span id="copy-ref-text">Copy Code</span>
-                                    </button>
-                                </div>
-                                <div class="referral-rules-note">
-                                    <span>Max 5 referrals per day. Lifetime static code.</span>
-                                </div>
-                            </div>
+        <!-- 2. Refer & Earn Section -->
+        <div class="credit-referral-card">
+            <!-- Left: Your Static Referral Code -->
+            <div class="referral-col-code">
+                <div class="referral-header-row">
+                    <span class="referral-badge-pill">Refer &amp; Earn</span>
+                    <span class="referral-subtext">Share with friends &mdash; both get +<span id="referral-reward-pts">10</span> credits!</span>
+                </div>
+                <div class="referral-box-row">
+                    <div class="referral-code-display" id="my-referral-code">REF-......</div>
+                    <button type="button" class="btn-action btn-copy-referral" id="btn-copy-ref"
+                        onclick="copyReferralCode()" title="Copy referral code">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        <span id="copy-ref-text">Copy Code</span>
+                    </button>
+                </div>
+                <div class="referral-rules-note">
+                    <span>Max 5 referrals per day.</span>
+                </div>
+            </div>
 
-                            <!-- Right: Claim Friend's Referral Code -->
-                            <div class="referral-col-claim">
-                                <div class="referral-claim-header">
-                                    <span class="referral-claim-title">Have a Referral Code?</span>
-                                </div>
-                                <div id="referral-input-container" class="credit-input-group">
-                                    <input type="text" id="referral-code-input" class="credit-code-input"
-                                        placeholder="REF-XXXXXX" maxlength="16" autocomplete="off"
-                                        spellcheck="false" style="text-transform: uppercase;"
-                                        onkeydown="if(event.key==='Enter') redeemReferralCode()">
-                                    <button type="button" class="btn-action btn-redeem" id="btn-claim-ref"
-                                        onclick="redeemReferralCode()">
-                                        Apply
-                                    </button>
-                                </div>
-                                <div id="referral-claimed-badge" class="referral-claimed-badge" style="display: none;">
-                                    <span class="badge-check">✓</span>
-                                    <span>Referral reward claimed (+10 credits)</span>
-                                </div>
-                                <div id="referral-claim-status" class="credit-redeem-status" style="display: none;"></div>
-                            </div>
-                        </div>
+            <!-- Right: Claim Friend's Referral Code -->
+            <div class="referral-col-claim">
+                <div class="referral-claim-header">
+                    <span class="referral-claim-title">Have a Referral Code?</span>
+                </div>
+                <div id="referral-input-container" class="credit-input-group">
+                    <input type="text" id="referral-code-input" class="credit-code-input" placeholder="REF-XXXXXX"
+                        maxlength="16" autocomplete="off" spellcheck="false" style="text-transform: uppercase;"
+                        onkeydown="if(event.key==='Enter') redeemReferralCode()">
+                    <button type="button" class="btn-action btn-redeem" id="btn-claim-ref"
+                        onclick="redeemReferralCode()">
+                        Apply
+                    </button>
+                </div>
+                <div id="referral-claimed-badge" class="referral-claimed-badge" style="display: none;">
+                    <span class="badge-check">✓</span>
+                    <span>Referral reward claimed (+<span id="referral-claimed-pts">10</span> credits)</span>
+                </div>
+                <div id="referral-claim-status" class="credit-redeem-status" style="display: none;"></div>
+            </div>
+        </div>
 
-                        <!-- 3. Transaction History Ledger Section -->
-                        <div class="credit-history-section">
-                            <div class="credit-history-header">
-                                <span class="credit-history-title">TRANSACTION HISTORY</span>
-                                <div class="credit-history-filters">
-                                    <button type="button" class="credit-filter-btn active" id="filter-all-btn"
-                                        onclick="filterCreditHistory('all', this)">All</button>
-                                    <button type="button" class="credit-filter-btn" id="filter-credit-btn"
-                                        onclick="filterCreditHistory('credit', this)">Credits</button>
-                                    <button type="button" class="credit-filter-btn" id="filter-debit-btn"
-                                        onclick="filterCreditHistory('debit', this)">Used</button>
-                                </div>
-                            </div>
-                            <div id="credit-history-list" class="credit-history-list" aria-live="polite">
-                                <p class="history-empty">Loading...</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+        <!-- 3. Transaction History Ledger Section -->
+        <div class="credit-history-section">
+            <div class="credit-history-header">
+                <span class="credit-history-title">TRANSACTION HISTORY</span>
+                <div class="credit-history-filters">
+                    <button type="button" class="credit-filter-btn active" id="filter-all-btn"
+                        onclick="filterCreditHistory('all', this)">All</button>
+                    <button type="button" class="credit-filter-btn" id="filter-credit-btn"
+                        onclick="filterCreditHistory('credit', this)">Credits</button>
+                    <button type="button" class="credit-filter-btn" id="filter-debit-btn"
+                        onclick="filterCreditHistory('debit', this)">Used</button>
+                </div>
+            </div>
+            <div id="credit-history-list" class="credit-history-list" aria-live="polite">
+                <p class="history-empty">Loading...</p>
+            </div>
+        </div>
+    </div>
+</section>
