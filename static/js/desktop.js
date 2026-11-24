@@ -823,6 +823,20 @@
                 const userEmailEl = document.getElementById('credit-user-email');
                 if (userEmailEl) userEmailEl.textContent = data.user_email || 'user@example.com';
 
+                // Update Referral Code & Status
+                const myRefEl = document.getElementById('my-referral-code');
+                if (myRefEl) myRefEl.textContent = data.referral_code || 'REF-USER01';
+
+                const refInputContainer = document.getElementById('referral-input-container');
+                const refClaimedBadge = document.getElementById('referral-claimed-badge');
+                if (data.has_redeemed_referral) {
+                    if (refInputContainer) refInputContainer.style.display = 'none';
+                    if (refClaimedBadge) refClaimedBadge.style.display = 'inline-flex';
+                } else {
+                    if (refInputContainer) refInputContainer.style.display = 'flex';
+                    if (refClaimedBadge) refClaimedBadge.style.display = 'none';
+                }
+
                 const txs = data.transactions || [];
                 renderCreditTransactions(txs, currentCreditFilter);
             } catch (err) {
@@ -955,6 +969,86 @@
                 input.value = '';
 
                 // Reload fresh credits and transactions
+                await loadCreditsData();
+            } catch (err) {
+                if (status) {
+                    status.style.display = 'block';
+                    status.className = 'credit-redeem-status error';
+                    status.textContent = err.message;
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = oldText;
+            }
+        }
+
+        async function copyReferralCode() {
+            const codeEl = document.getElementById('my-referral-code');
+            const btnText = document.getElementById('copy-ref-text');
+            if (!codeEl) return;
+            const code = codeEl.textContent.trim();
+            try {
+                await navigator.clipboard.writeText(code);
+                if (btnText) {
+                    const old = btnText.textContent;
+                    btnText.textContent = "Copied!";
+                    setTimeout(() => { btnText.textContent = old; }, 2000);
+                }
+            } catch (e) {
+                const input = document.createElement('input');
+                input.value = code;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                if (btnText) {
+                    btnText.textContent = "Copied!";
+                    setTimeout(() => { btnText.textContent = "Copy Code"; }, 2000);
+                }
+            }
+        }
+
+        async function redeemReferralCode() {
+            const input = document.getElementById('referral-code-input');
+            const btn = document.getElementById('btn-claim-ref');
+            const status = document.getElementById('referral-claim-status');
+            if (!input || !btn) return;
+            const code = input.value.trim().toUpperCase();
+            if (!code) {
+                if (status) {
+                    status.style.display = 'block';
+                    status.className = 'credit-redeem-status error';
+                    status.textContent = 'Please enter a referral code.';
+                }
+                return;
+            }
+
+            const oldText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Applying...';
+            if (status) status.style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/credits/referral/redeem', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Pairing-Token': pairingToken
+                    },
+                    body: JSON.stringify({ code: code })
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    throw new Error(data.detail || data.message || 'Failed to redeem referral code.');
+                }
+
+                if (status) {
+                    status.style.display = 'block';
+                    status.className = 'credit-redeem-status success';
+                    status.textContent = data.message || `Referral code applied! You received +${data.reward || 10} credit points.`;
+                }
+
+                input.value = '';
                 await loadCreditsData();
             } catch (err) {
                 if (status) {

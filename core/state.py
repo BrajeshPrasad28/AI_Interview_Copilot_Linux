@@ -229,6 +229,8 @@ def load_app_credits() -> Dict[str, Any]:
                     changed = False
                     for tx in data.get("transactions", []):
                         desc = tx.get("description", "")
+                        if "referral" in desc.lower():
+                            continue
                         if tx.get("type") == "credit":
                             if "voucher" in desc.lower() or "starter" in desc.lower() or "bonus" in desc.lower() or "(" in desc:
                                 tx["description"] = "Credit Points Added"
@@ -401,6 +403,91 @@ def redeem_credit_code(
             "error": "Dashboard credit server unreachable. Please check your network connection or verify that the server is online."
         }
 
+def redeem_referral_code(
+    raw_code: str,
+    user_name: str = "",
+    user_email: str = "",
+    user_phone: str = "",
+    dashboard_url: Optional[str] = None
+) -> Dict[str, Any]:
+    """Redeem a referral code for referee user, adding 10 credits and recording 1-time claim."""
+    cleaned = (raw_code or "").strip().upper()
+    if not cleaned:
+        return {
+            "success": False,
+            "error": "Referral code is required."
+        }
+
+    credits_data = load_app_credits()
+    if credits_data.get("has_redeemed_referral"):
+        return {
+            "success": False,
+            "error": "You have already redeemed a referral code. Only one redemption is allowed per account/device."
+        }
+
+    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    endpoint = f"{url}/api/referrals/redeem"
+    payload = {
+        "code": cleaned,
+        "uuid": get_user_uuid(),
+        "machine_id": get_machine_id(),
+        "name": user_name or current_state.get("profile_name", ""),
+        "email": user_email or current_state.get("profile_email", ""),
+        "phone": user_phone or current_state.get("profile_phone", "")
+    }
+
+    headers = _get_dashboard_headers()
+    try:
+        import httpx
+        resp = httpx.post(endpoint, json=payload, headers=headers, timeout=5.0)
+        data = resp.json() if resp.status_code in (200, 400, 404, 409, 429) else {}
+        if resp.status_code == 200 and (data.get("success") or data.get("status") == "success"):
+            reward = float(data.get("reward", 10.0))
+            new_balance = round(float(credits_data.get("balance", 0.0)) + reward, 2)
+            credits_data["balance"] = new_balance
+            credits_data["has_redeemed_referral"] = True
+            credits_data["applied_referral_code"] = cleaned
+
+            txn_id = f"TXN-REF-{secrets.randbelow(90000) + 10000}"
+            tx = {
+                "id": txn_id,
+                "type": "credit",
+                "amount": reward,
+                "balance_after": new_balance,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                "code": cleaned,
+                "expiry_date": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d"),
+                "description": f"Referral Bonus (+{int(reward)} pts)",
+                "user_name": (user_name or "").strip() or current_state.get("profile_name") or "User",
+                "user_email": (user_email or "").strip() or current_state.get("profile_email") or "user@example.com",
+                "user_phone": (user_phone or "").strip() or current_state.get("profile_phone") or "N/A"
+            }
+            if "transactions" not in credits_data:
+                credits_data["transactions"] = []
+            credits_data["transactions"].insert(0, tx)
+            save_app_credits(credits_data)
+
+            return {
+                "success": True,
+                "reward": reward,
+                "balance": new_balance,
+                "code": cleaned,
+                "message": data.get("message", f"Referral code applied! You received +{reward} credit points."),
+                "transaction": tx
+            }
+        else:
+            err_msg = data.get("message") or data.get("error") or f"Server returned error code {resp.status_code}"
+            return {
+                "success": False,
+                "error": err_msg
+            }
+    except Exception as exc:
+        logger.warning(f"Failed to connect to referral server ({endpoint}): {exc}")
+        return {
+            "success": False,
+            "error": "Referral credit server unreachable. Please check your network connection."
+        }
+
 def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any]:
     """Startup handshake with central dashboard: validates machine ID, gets rates, or falls back to offline grace mode."""
     url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
@@ -453,6 +540,42 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
                     current_state["has_gemini_key"] = True
                     current_state["has_api_key"] = True
                     logger.info("Managed Gemini API key synced from Central Dashboard.")
+
+                credits_data = load_app_credits()
+
+                # Sync static referral code and status from dashboard
+                remote_ref_code = data.get("referral_code")
+                if remote_ref_code:
+                    credits_data["referral_code"] = remote_ref_code
+                    current_state["referral_code"] = remote_ref_code
+
+                if data.get("has_redeemed_referral") is not None:
+                    credits_data["has_redeemed_referral"] = bool(data.get("has_redeemed_referral"))
+
+                # Asynchronous reward processing for referrer
+                pending_referral = float(data.get("pending_referral_credits", 0.0) or 0.0)
+                if pending_referral > 0:
+                    cur_bal = round(float(credits_data.get("balance", 0.0)), 2)
+                    new_bal = round(cur_bal + pending_referral, 2)
+                    credits_data["balance"] = new_bal
+                    ref_txn = {
+                        "id": f"TXN-RWD-{secrets.randbelow(90000) + 10000}",
+                        "type": "credit",
+                        "amount": pending_referral,
+                        "balance_after": new_bal,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                        "code": "REFERRAL-REWARD",
+                        "expiry_date": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d"),
+                        "description": f"Referral Reward (+{int(pending_referral)} pts) - Friends joined",
+                        "user_name": current_state.get("profile_name", "User"),
+                        "user_email": current_state.get("profile_email", "user@example.com"),
+                        "user_phone": current_state.get("profile_phone", "N/A"),
+                    }
+                    if "transactions" not in credits_data:
+                        credits_data["transactions"] = []
+                    credits_data["transactions"].insert(0, ref_txn)
+                    save_app_credits(credits_data)
+                    logger.info(f"Synced +{pending_referral} referral reward points from Central Dashboard! New balance: {new_bal}")
 
                 # 1. Primary Ledger-based sync: Sync any remote voucher codes assigned to this user that are not yet recorded locally
                 remote_codes = data.get("redeemed_codes")

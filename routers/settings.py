@@ -1,3 +1,4 @@
+import re
 import asyncio
 import logging
 from typing import Dict, Any
@@ -14,6 +15,7 @@ from core.state import (
     delete_saved_resume,
     load_app_credits,
     redeem_credit_code,
+    redeem_referral_code,
     get_machine_id,
     get_user_uuid,
     sync_user_profile_to_dashboard,
@@ -251,6 +253,11 @@ async def api_delete_resume():
 @router.get("/api/credits", dependencies=[Depends(verify_pairing_token)])
 async def api_get_credits():
     credits_data = load_app_credits()
+    ref_code = credits_data.get("referral_code") or current_state.get("referral_code")
+    if not ref_code:
+        u_raw = re.sub(r"[^A-Za-z0-9]", "", get_user_uuid()).upper()
+        ref_code = f"REF-{u_raw[:6]}" if len(u_raw) >= 6 else "REF-USER01"
+
     return {
         "balance": credits_data.get("balance", 0),
         "transactions": credits_data.get("transactions", []),
@@ -258,7 +265,10 @@ async def api_get_credits():
         "user_email": current_state.get("profile_email", ""),
         "user_phone": current_state.get("profile_phone", ""),
         "user_uuid": get_user_uuid(),
-        "machine_id": get_machine_id()
+        "machine_id": get_machine_id(),
+        "referral_code": ref_code,
+        "has_redeemed_referral": bool(credits_data.get("has_redeemed_referral", False)),
+        "applied_referral_code": credits_data.get("applied_referral_code", "")
     }
 
 @router.post("/api/credits/redeem", dependencies=[Depends(verify_pairing_token)])
@@ -280,5 +290,28 @@ async def api_redeem_credits(payload: Dict[str, Any]):
         "type": "credits_updated",
         "balance": res["balance"],
         "transaction": res.get("transaction")
+    })
+    return res
+
+@router.post("/api/credits/referral/redeem", dependencies=[Depends(verify_pairing_token)])
+async def api_redeem_referral(payload: Dict[str, Any]):
+    code = str(payload.get("code") or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="Referral code cannot be empty.")
+
+    res = redeem_referral_code(
+        raw_code=code,
+        user_name=current_state.get("profile_name", ""),
+        user_email=current_state.get("profile_email", ""),
+        user_phone=current_state.get("profile_phone", "")
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to redeem referral code."))
+
+    await manager.broadcast({
+        "type": "credits_updated",
+        "balance": res["balance"],
+        "transaction": res.get("transaction"),
+        "has_redeemed_referral": True
     })
     return res

@@ -17,8 +17,11 @@ __pycache__/
 
 # Testing & Scratch
 scratch/
-test_*.py
+/test_*.py
 *test*.pyc
+!tests/
+!tests/*.py
+!tests/**/
 
 # Build & Dist outputs
 dist/
