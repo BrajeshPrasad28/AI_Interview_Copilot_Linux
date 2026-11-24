@@ -155,6 +155,38 @@ class TestDesktopProfileRestoreAndSync(unittest.TestCase):
         self.assertTrue(data.get("found"))
         self.assertEqual(data.get("user", {}).get("name"), "Restored Aarav")
 
+    @patch("httpx.Client.post")
+    def test_sync_startup_handshake_sends_balance_and_transactions(self, mock_post):
+        """sync_startup_handshake includes client balance and transactions in handshake payload."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "status": "success",
+            "rates": {"call_per_minute": 2.50},
+            "referral_code": "REF-ABC123"
+        }
+        mock_post.return_value = mock_resp
+
+        state.save_app_credits({
+            "balance": 845.0,
+            "has_redeemed_referral": False,
+            "referral_code": "REF-ABC123",
+            "redeemed_codes": [],
+            "transactions": [{"id": "TXN-TEST-1", "type": "credit", "amount": 100.0, "balance_after": 845.0, "description": "Test"}]
+        })
+
+        res = state.sync_startup_handshake(dashboard_url="http://localhost:5000")
+        self.assertIsNotNone(res)
+
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        self.assertIn("/api/app/startup-check", args[0])
+        payload = kwargs.get("json", {})
+        self.assertEqual(payload.get("balance"), 845.0)
+        self.assertIsInstance(payload.get("transactions"), list)
+        self.assertEqual(len(payload.get("transactions")), 1)
+        self.assertEqual(payload.get("transactions")[0]["id"], "TXN-TEST-1")
+
 
 if __name__ == "__main__":
     unittest.main()

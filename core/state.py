@@ -499,12 +499,18 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
     profile_email = current_state.get("profile_email", "")
     profile_phone = current_state.get("profile_phone", "")
 
+    credits_data = load_app_credits()
+    current_bal = float(credits_data.get("balance", 0.0) or 0.0)
+    txns = credits_data.get("transactions", [])
+
     payload = {
         "uuid": user_uuid,
         "machine_id": machine_id,
         "name": profile_name,
         "email": profile_email,
-        "phone": profile_phone
+        "phone": profile_phone,
+        "balance": current_bal,
+        "transactions": txns
     }
 
     headers = _get_dashboard_headers()
