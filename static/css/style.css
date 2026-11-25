@@ -2237,6 +2237,47 @@ kbd {
     user-select: all;
 }
 
+.btn-icon-copy {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    background: rgba(255, 255, 255, 0.07) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-radius: 6px !important;
+    color: #cbd5e1 !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+    flex-shrink: 0 !important;
+    transition: all 0.18s ease;
+}
+
+.btn-icon-copy:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.30) !important;
+    color: #ffffff !important;
+    transform: translateY(-1px);
+}
+
+.btn-icon-copy:active {
+    transform: translateY(0);
+}
+
+.btn-icon-copy.copied {
+    background: rgba(16, 185, 129, 0.20) !important;
+    border-color: rgba(16, 185, 129, 0.50) !important;
+    color: #34d399 !important;
+}
+
+.btn-icon-copy.copied .icon-copy-default {
+    display: none !important;
+}
+
+.btn-icon-copy.copied .icon-copy-check {
+    display: block !important;
+}
+
 .btn-copy-referral {
     background: rgba(255, 255, 255, 0.06) !important;
     border: 1px solid rgba(255, 255, 255, 0.15) !important;

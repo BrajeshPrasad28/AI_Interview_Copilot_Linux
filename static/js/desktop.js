@@ -1069,16 +1069,31 @@
 
         async function copyReferralCode() {
             const codeEl = document.getElementById('my-referral-code');
+            const btn = document.getElementById('btn-copy-ref');
             const btnText = document.getElementById('copy-ref-text');
             if (!codeEl) return;
             const code = codeEl.textContent.trim();
-            try {
-                await navigator.clipboard.writeText(code);
+            function triggerCopiedFeedback() {
+                if (btn) {
+                    btn.classList.add('copied');
+                    btn.title = "Copied!";
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        btn.title = "Copy referral code";
+                    }, 1500);
+                }
                 if (btnText) {
                     const old = btnText.textContent;
                     btnText.textContent = "Copied!";
-                    setTimeout(() => { btnText.textContent = old; }, 2000);
+                    setTimeout(() => { btnText.textContent = old || "Copy Code"; }, 1500);
                 }
+                if (typeof showStealthToast === 'function') {
+                    showStealthToast('Referral code copied!');
+                }
+            }
+            try {
+                await navigator.clipboard.writeText(code);
+                triggerCopiedFeedback();
             } catch (e) {
                 const input = document.createElement('input');
                 input.value = code;
@@ -1086,10 +1101,7 @@
                 input.select();
                 document.execCommand('copy');
                 document.body.removeChild(input);
-                if (btnText) {
-                    btnText.textContent = "Copied!";
-                    setTimeout(() => { btnText.textContent = "Copy Code"; }, 2000);
-                }
+                triggerCopiedFeedback();
             }
         }
 
