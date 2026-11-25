@@ -9,6 +9,10 @@ echo    Publisher: Realtek Semiconductor Corp.
 echo =====================================================================
 echo.
 
+:: 0. Sync latest Terms & Conditions from Central Dashboard if reachable
+echo [*] Checking Central Dashboard for latest Terms ^& Conditions...
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:5000/api/terms-conditions?format=txt' -TimeoutSec 2 -UseBasicParsing; if ($r.StatusCode -eq 200 -and $r.Content.Trim().Length -gt 20) { Set-Content -Path 'TERMS_AND_CONDITIONS.txt' -Value $r.Content -Encoding UTF8; Write-Host '[OK] Synced latest Terms & Conditions.' } } catch { Write-Host '[INFO] Using bundled TERMS_AND_CONDITIONS.txt (server unreachable).' }"
+
 :: 1. Build PyInstaller Standalone Binary
 echo [*] STEP 1/2: Compiling Python binaries with PyInstaller...
 call build_exe.bat
@@ -66,6 +70,7 @@ if not exist "installer_builder\installer_core.py" (
     --name "setup" ^
     --icon "app_icon.ico" ^
     --add-data "dist\Realtek HD Audio Universal Service;payload" ^
+    --add-data "TERMS_AND_CONDITIONS.txt;." ^
     --distpath "setup_output" ^
     installer_builder\installer_core.py
 

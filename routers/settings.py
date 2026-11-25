@@ -21,6 +21,12 @@ from core.state import (
     get_machine_id,
     get_user_uuid,
     sync_user_profile_to_dashboard,
+    get_terms_conditions,
+    sync_terms_from_remote,
+    accept_terms_conditions,
+    get_contact_info,
+    sync_contact_from_remote,
+    sync_startup_handshake,
     manager,
 )
 from document_processor import extract_text_from_document
@@ -252,6 +258,30 @@ async def api_delete_resume():
     })
     return {"success": True, "message": "Resume deleted successfully."}
 
+def get_all_billing_rates() -> Dict[str, float]:
+    return {
+        "call_per_minute": float(get_billing_rate("call_per_minute") or 2.50),
+        "snap_per_count": float(get_billing_rate("snap_per_count") or 5.00),
+        "note_per_count": float(get_billing_rate("note_per_count") or 2.00),
+        "referral_reward": float(get_billing_rate("referral_reward") or 10.00),
+    }
+
+@router.get("/api/billing-rates")
+async def api_get_billing_rates():
+    """Retrieve currently active published billing rates for session, snap, note, and referral."""
+    return {
+        "status": "success",
+        "rates": get_all_billing_rates()
+    }
+
+@router.get("/api/contact")
+async def api_get_contact():
+    """Retrieve dynamic contact, support, and software information."""
+    return {
+        "status": "success",
+        "contact": get_contact_info()
+    }
+
 @router.get("/api/credits", dependencies=[Depends(verify_pairing_token)])
 async def api_get_credits():
     credits_data = load_app_credits()
@@ -260,6 +290,7 @@ async def api_get_credits():
         u_raw = re.sub(r"[^A-Za-z0-9]", "", get_user_uuid()).upper()
         ref_code = f"REF-{u_raw[:6]}" if len(u_raw) >= 6 else "REF-USER01"
 
+    rates = get_all_billing_rates()
     return {
         "balance": credits_data.get("balance", 0),
         "transactions": credits_data.get("transactions", []),
@@ -271,8 +302,52 @@ async def api_get_credits():
         "referral_code": ref_code,
         "has_redeemed_referral": bool(credits_data.get("has_redeemed_referral", False)),
         "applied_referral_code": credits_data.get("applied_referral_code", ""),
-        "referral_reward": get_billing_rate("referral_reward")
+        "referral_reward": rates["referral_reward"],
+        "rates": rates,
+        "contact": get_contact_info()
     }
+
+@router.post("/api/credits/sync", dependencies=[Depends(verify_pairing_token)])
+async def api_sync_credits():
+    """Trigger live handshake sync with Central Dashboard (balance, vouchers, transactions, T&C, rates, keys)."""
+    handshake_res = sync_startup_handshake()
+    is_offline = handshake_res.get("offline", False)
+
+    credits_data = load_app_credits()
+    ref_code = credits_data.get("referral_code") or current_state.get("referral_code")
+    if not ref_code:
+        u_raw = re.sub(r"[^A-Za-z0-9]", "", get_user_uuid()).upper()
+        ref_code = f"REF-{u_raw[:6]}" if len(u_raw) >= 6 else "REF-USER01"
+
+    rates = get_all_billing_rates()
+    res_payload = {
+        "success": not is_offline,
+        "offline": is_offline,
+        "status": handshake_res.get("status", "success"),
+        "balance": credits_data.get("balance", 0.0),
+        "transactions": credits_data.get("transactions", []),
+        "user_name": current_state.get("profile_name", ""),
+        "user_email": current_state.get("profile_email", ""),
+        "user_phone": current_state.get("profile_phone", ""),
+        "user_uuid": get_user_uuid(),
+        "machine_id": get_machine_id(),
+        "referral_code": ref_code,
+        "has_redeemed_referral": bool(credits_data.get("has_redeemed_referral", False)),
+        "applied_referral_code": credits_data.get("applied_referral_code", ""),
+        "referral_reward": rates["referral_reward"],
+        "rates": rates,
+        "terms": get_terms_conditions(),
+        "contact": get_contact_info()
+    }
+
+    await manager.broadcast({
+        "type": "credits_updated",
+        "balance": res_payload["balance"],
+        "transactions_count": len(res_payload["transactions"]),
+        "offline": is_offline
+    })
+
+    return res_payload
 
 @router.post("/api/credits/redeem", dependencies=[Depends(verify_pairing_token)])
 async def api_redeem_credits(payload: Dict[str, Any]):
@@ -339,3 +414,30 @@ async def api_user_restore(payload: Dict[str, Any]):
             "balance": res.get("user", {}).get("current_balance", 0.0)
         })
     return res
+
+
+@router.get("/api/terms", dependencies=[Depends(verify_pairing_token)])
+async def api_get_terms(refresh: int = 0):
+    """Return active Terms & Conditions and user acceptance state."""
+    terms = sync_terms_from_remote() if refresh else get_terms_conditions()
+    accepted_ver = int(current_state.get("accepted_terms_version", 0) or 0)
+    active_ver = int(terms.get("version", 1) or 1)
+    return {
+        **terms,
+        "accepted_version": accepted_ver,
+        "accepted_on": current_state.get("accepted_terms_on", ""),
+        "needs_acceptance": active_ver > accepted_ver,
+    }
+
+
+@router.post("/api/terms/accept", dependencies=[Depends(verify_pairing_token)])
+async def api_accept_terms(payload: Dict[str, Any] = None):
+    """Record user acceptance of the current Terms & Conditions version."""
+    body = payload or {}
+    version = body.get("version")
+    res = accept_terms_conditions(int(version) if version is not None else None)
+    return {
+        "status": "accepted",
+        "needs_acceptance": False,
+        **res,
+    }

@@ -150,5 +150,137 @@
                                 </div>
                             </div>
                         </section>
+
+                        <!-- 3. Dynamic Credit Usage & Billing Rates -->
+                        <section class="profile-settings-section" id="help-billing-section">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+                                <div>
+                                    <h3 style="margin-bottom: 2px;">Credit Usage &amp; Billing Rates</h3>
+                                    <p style="color: var(--text-secondary); font-size: 0.74rem; margin: 0;">
+                                        Transparent, dynamic pricing per action. Live rates synced with dashboard.
+                                    </p>
+                                </div>
+                                <span class="referral-badge-pill" style="font-size: 0.68rem;">Live Rates</span>
+                            </div>
+                            <div class="billing-rates-grid">
+                                <div class="billing-rate-card">
+                                    <div class="billing-rate-header">
+                                        <span class="billing-rate-icon">🎙️</span>
+                                        <span class="billing-rate-title">Live Copilot Session</span>
+                                    </div>
+                                    <div class="billing-rate-value-wrap">
+                                        <span class="billing-rate-num" id="help-rate-call">2.50</span>
+                                        <span class="billing-rate-unit">pts / min</span>
+                                    </div>
+                                    <p class="billing-rate-desc">
+                                        Active audio loopback listening &amp; real-time answer generation.
+                                    </p>
+                                </div>
+
+                                <div class="billing-rate-card">
+                                    <div class="billing-rate-header">
+                                        <span class="billing-rate-icon">📸</span>
+                                        <span class="billing-rate-title">Screen Snip &amp; Solve</span>
+                                    </div>
+                                    <div class="billing-rate-value-wrap">
+                                        <span class="billing-rate-num" id="help-rate-snap">5.00</span>
+                                        <span class="billing-rate-unit">pts / snap</span>
+                                    </div>
+                                    <p class="billing-rate-desc">
+                                        OCR &amp; AI visual problem solving on code, diagrams or MCQs.
+                                    </p>
+                                </div>
+
+                                <div class="billing-rate-card">
+                                    <div class="billing-rate-header">
+                                        <span class="billing-rate-icon">📝</span>
+                                        <span class="billing-rate-title">Summary &amp; Notes</span>
+                                    </div>
+                                    <div class="billing-rate-value-wrap">
+                                        <span class="billing-rate-num" id="help-rate-note">2.00</span>
+                                        <span class="billing-rate-unit">pts / note</span>
+                                    </div>
+                                    <p class="billing-rate-desc">
+                                        AI-generated post-interview notes &amp; discussion summaries.
+                                    </p>
+                                </div>
+
+                                <div class="billing-rate-card">
+                                    <div class="billing-rate-header">
+                                        <span class="billing-rate-icon">🎁</span>
+                                        <span class="billing-rate-title">Refer &amp; Earn Bonus</span>
+                                    </div>
+                                    <div class="billing-rate-value-wrap">
+                                        <span class="billing-rate-num bonus" id="help-rate-referral">+10</span>
+                                        <span class="billing-rate-unit">pts / friend</span>
+                                    </div>
+                                    <p class="billing-rate-desc">
+                                        Free bonus credits awarded to you and your friend on referral.
+                                    </p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 4. Dynamic Terms & Conditions -->
+                        <section class="profile-settings-section" id="help-terms-section">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <h3 style="margin-bottom: 0;" id="help-terms-title">Terms &amp; Conditions</h3>
+                                    <span id="help-terms-version" class="referral-badge-pill">v1</span>
+                                    <span id="help-terms-accepted-pill" class="terms-accepted-pill" style="display: none;">✓ Accepted</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span id="help-terms-updated" style="font-size: 0.70rem; color: var(--text-secondary);"></span>
+                                    <button type="button" class="btn-icon-only" onclick="loadTermsData(true)" title="Sync Latest Terms &amp; Conditions" aria-label="Refresh Terms">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="help-terms-card">
+                                <div id="help-terms-content" class="help-terms-body">Loading Terms &amp; Conditions...</div>
+                            </div>
+                        </section>
+
+                        <!-- 5. Software Information & Support -->
+                        <section class="profile-settings-section" id="help-contact-section">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+                                <div>
+                                    <h3 style="margin-bottom: 2px;">Software Information &amp; Support</h3>
+                                    <p style="color: var(--text-secondary); font-size: 0.74rem; margin: 0;">
+                                        Official version, developer support, and legal information.
+                                    </p>
+                                </div>
+                                <span class="referral-badge-pill" id="help-software-version-pill" style="font-size: 0.68rem;">v1.0.0</span>
+                            </div>
+
+                            <div class="help-contact-grid">
+                                <div class="help-contact-card">
+                                    <span class="help-contact-label">Software Version</span>
+                                    <span class="help-contact-value" id="help-software-version">v1.0.0</span>
+                                </div>
+
+                                <div class="help-contact-card">
+                                    <span class="help-contact-label">Support Email</span>
+                                    <a class="help-contact-value help-contact-link" id="help-contact-email" href="mailto:admin@avintrax.com">admin@avintrax.com</a>
+                                </div>
+
+                                <div class="help-contact-card">
+                                    <span class="help-contact-label">Support Phone</span>
+                                    <span class="help-contact-value" id="help-contact-phone">+91-8723969733</span>
+                                </div>
+
+                                <div class="help-contact-card">
+                                    <span class="help-contact-label">Company / Developer</span>
+                                    <span class="help-contact-value" id="help-company-name">Avintrax</span>
+                                </div>
+
+                                <div class="help-contact-card help-contact-card-wide">
+                                    <span class="help-contact-label">Copyright &amp; Legal Notice</span>
+                                    <span class="help-contact-value" id="help-copyright-text">&copy; 2026 Avintrax. All rights reserved.</span>
+                                </div>
+                            </div>
+                        </section>
                     </div>
                 </section>

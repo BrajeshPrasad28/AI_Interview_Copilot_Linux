@@ -24,6 +24,7 @@ if not exist ".venv\Scripts\pyinstaller.exe" (
     --add-data "templates;templates" ^
     --add-data "static;static" ^
     --add-data ".env;.env" ^
+    --add-data "TERMS_AND_CONDITIONS.txt;." ^
     --add-data "models;models" ^
     --collect-all uvicorn ^
     --collect-all starlette ^

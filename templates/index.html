@@ -57,6 +57,31 @@
     {% include 'components/view_copilot.html' %}
 
     <!-- =====================================================================
+         TERMS & CONDITIONS ACCEPTANCE MODAL (FIRST LAUNCH / UPDATED VERSION)
+         ===================================================================== -->
+    <div id="terms-acceptance-modal" class="terms-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-terms-title" style="display: none;">
+        <div class="terms-modal-card">
+            <div class="terms-modal-header">
+                <div>
+                    <span class="referral-badge-pill" id="modal-terms-version">v1</span>
+                    <h2 id="modal-terms-title" style="margin: 6px 0 2px 0; font-size: 1.05rem; color: #f8fafc;">Terms &amp; Conditions</h2>
+                    <p style="margin: 0; font-size: 0.74rem; color: #94a3b8;">Please review and accept the latest Terms &amp; Conditions to continue using Interview Copilot.</p>
+                </div>
+            </div>
+            <div id="modal-terms-content" class="terms-modal-body">Loading Terms &amp; Conditions...</div>
+            <div class="terms-modal-footer">
+                <label class="terms-checkbox-label">
+                    <input type="checkbox" id="terms-agree-checkbox" onchange="document.getElementById('btn-accept-terms').disabled = !this.checked;">
+                    <span>I have read and agree to the Terms &amp; Conditions</span>
+                </label>
+                <button type="button" id="btn-accept-terms" class="btn-action btn-redeem" disabled onclick="acceptTermsAndContinue()">
+                    Accept &amp; Continue
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
          SCRIPTS: UNIFIED NAVIGATION & WEBSOCKET ENGINE
          ===================================================================== -->
     <script>

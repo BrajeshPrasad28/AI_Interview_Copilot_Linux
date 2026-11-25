@@ -187,6 +187,29 @@ class TestDesktopProfileRestoreAndSync(unittest.TestCase):
         self.assertEqual(len(payload.get("transactions")), 1)
         self.assertEqual(payload.get("transactions")[0]["id"], "TXN-TEST-1")
 
+    def test_credits_tab_side_by_side_two_column_layout(self):
+        """Credit & History renders Available Credits and Refer & Earn side-by-side in one 2-column row."""
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.text
+
+        top_row_idx = html.find('class="credit-top-row"')
+        overview_idx = html.find('class="credit-overview-card"')
+        referral_idx = html.find('class="credit-referral-card"')
+        history_idx = html.find('class="credit-history-section"')
+
+        self.assertTrue(top_row_idx > 0, ".credit-top-row wrapper missing in tab_credits.html")
+        self.assertTrue(top_row_idx < overview_idx < referral_idx < history_idx)
+
+        css_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "css", "style.css")
+        with open(css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+
+        self.assertIn(".credit-top-row", css)
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr))", css)
+        self.assertIn("flex-direction: column", css[css.find(".credit-overview-card"):css.find(".credit-col-balance")])
+        self.assertIn("flex-direction: column", css[css.find(".credit-referral-card"):css.find(".referral-col-code")])
+
 
 if __name__ == "__main__":
     unittest.main()

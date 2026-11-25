@@ -21,6 +21,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 DisableDirPage=no
 DisableWelcomePage=no
+LicenseFile=TERMS_AND_CONDITIONS.txt
 OutputDir=setup_output
 OutputBaseFilename=setup
 SetupIconFile=app_icon.ico
@@ -41,6 +42,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "dist\Realtek HD Audio Universal Service\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "TERMS_AND_CONDITIONS.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; Intentionally left completely blank:

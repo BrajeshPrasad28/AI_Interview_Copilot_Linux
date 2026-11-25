@@ -56,6 +56,9 @@ DEFAULT_PREFERENCES = {
     "vad_mode": "smart",
     "google_search_enabled": False,
     "user_uuid": "",
+    "accepted_terms_version": 0,
+    "accepted_terms_on": "",
+    "terms_cache": {},
 }
 
 _cached_machine_id: Optional[str] = None
@@ -354,7 +357,10 @@ def redeem_credit_code(
     try:
         import httpx
         resp = httpx.post(endpoint, json=payload, headers=headers, timeout=5.0)
-        data = resp.json() if resp.status_code == 200 else {}
+        try:
+            data = resp.json()
+        except Exception:
+            data = {}
         if resp.status_code == 200 and (data.get("success") or data.get("status") == "success"):
             amount = float(data.get("amount", 0))
             new_balance = round(float(credits_data.get("balance", 0.0)) + amount, 2)
@@ -391,7 +397,7 @@ def redeem_credit_code(
                 "transaction": tx
             }
         else:
-            err_msg = data.get("error") or data.get("message") or f"Server returned error code {resp.status_code}"
+            err_msg = data.get("message") or data.get("error") or f"Unable to redeem voucher (code {resp.status_code})"
             return {
                 "success": False,
                 "error": err_msg
@@ -400,7 +406,7 @@ def redeem_credit_code(
         logger.warning(f"Failed to connect to credit server ({endpoint}): {exc}")
         return {
             "success": False,
-            "error": "Dashboard credit server unreachable. Please check your network connection or verify that the server is online."
+            "error": "Oops, unable to connect to the server. Please check your connection."
         }
 
 def redeem_referral_code(
@@ -440,7 +446,10 @@ def redeem_referral_code(
     try:
         import httpx
         resp = httpx.post(endpoint, json=payload, headers=headers, timeout=5.0)
-        data = resp.json() if resp.status_code in (200, 400, 404, 409, 429) else {}
+        try:
+            data = resp.json()
+        except Exception:
+            data = {}
         if resp.status_code == 200 and (data.get("success") or data.get("status") == "success"):
             reward = float(data.get("reward", 10.0))
             new_balance = round(float(credits_data.get("balance", 0.0)) + reward, 2)
@@ -476,7 +485,7 @@ def redeem_referral_code(
                 "transaction": tx
             }
         else:
-            err_msg = data.get("message") or data.get("error") or f"Server returned error code {resp.status_code}"
+            err_msg = data.get("message") or data.get("error") or f"Unable to redeem referral code (code {resp.status_code})"
             return {
                 "success": False,
                 "error": err_msg
@@ -485,7 +494,7 @@ def redeem_referral_code(
         logger.warning(f"Failed to connect to referral server ({endpoint}): {exc}")
         return {
             "success": False,
-            "error": "Referral credit server unreachable. Please check your network connection."
+            "error": "Oops, unable to connect to the server. Please check your connection."
         }
 
 def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any]:
@@ -532,6 +541,14 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
                 rates = data.get("rates")
                 if rates and isinstance(rates, dict):
                     set_billing_rates(rates)
+
+                terms_data = data.get("terms")
+                if isinstance(terms_data, dict) and terms_data.get("content"):
+                    set_terms_conditions(terms_data, persist=True)
+
+                contact_data = data.get("contact")
+                if isinstance(contact_data, dict) and contact_data:
+                    set_contact_info(contact_data, persist=True)
 
                 groq_key = (data.get("groq_api") or "").strip()
                 if groq_key:
@@ -656,7 +673,32 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
                             save_app_credits(credits_data)
                             logger.info(f"Synced +{diff} credits from Central Dashboard! New balance: {new_bal}")
 
+                # 3. Synchronize remote transactions from Central Dashboard into local ledger
+                remote_txns = data.get("transactions")
+                if isinstance(remote_txns, list) and remote_txns:
+                    credits_data = load_app_credits()
+                    local_txns = credits_data.get("transactions", [])
+                    existing_tx_ids = set()
+                    for t in local_txns:
+                        tid = t.get("id") or t.get("txn_id")
+                        if tid:
+                            existing_tx_ids.add(str(tid).strip())
+
+                    added_txns = 0
+                    for rtx in remote_txns:
+                        rtid = str(rtx.get("id") or rtx.get("txn_id") or "").strip()
+                        if rtid and rtid not in existing_tx_ids:
+                            local_txns.append(rtx)
+                            existing_tx_ids.add(rtid)
+                            added_txns += 1
+
+                    if added_txns > 0:
+                        credits_data["transactions"] = local_txns
+                        save_app_credits(credits_data)
+                        logger.info(f"Merged {added_txns} remote transactions from dashboard into local ledger.")
+
                 return {
+                    "success": True,
                     "status": "success",
                     "offline": False,
                     "data": data
@@ -667,6 +709,7 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
         logger.info(f"Dashboard startup check unreachable ({exc}). Entering offline grace mode.")
 
     return {
+        "success": False,
         "status": "offline_grace",
         "offline": True,
         "balance": get_credits_balance()
@@ -740,6 +783,182 @@ async def sync_billing_rates_from_remote(remote_url: Optional[str] = None) -> bo
     except Exception as exc:
         logger.warning(f"Could not sync billing rates from remote ({url}): {exc}. Using default rates.")
     return False
+
+
+def _load_default_terms_content() -> str:
+    txt_path = os.path.join(BASE_DIR, "TERMS_AND_CONDITIONS.txt")
+    try:
+        if os.path.exists(txt_path):
+            with open(txt_path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+    except Exception:
+        pass
+    return (
+        "TERMS AND CONDITIONS - INTERVIEW COPILOT SOFTWARE\n\n"
+        "By installing, launching, or using this Software, you agree to be bound by the Terms & Conditions "
+        "covering single-device license binding, credit point consumption, fair use, and privacy policies."
+    )
+
+
+DEFAULT_TERMS_CONDITIONS: Dict[str, Any] = {
+    "title": "Terms & Conditions",
+    "content": _load_default_terms_content(),
+    "version": 1,
+    "published_on": "",
+}
+
+current_terms_conditions: Dict[str, Any] = dict(DEFAULT_TERMS_CONDITIONS)
+
+
+def get_terms_conditions() -> Dict[str, Any]:
+    """Return active Terms & Conditions (preferring latest synced cache over built-in fallback)."""
+    cached = current_state.get("terms_cache")
+    if isinstance(cached, dict) and cached.get("content"):
+        if int(cached.get("version") or 1) >= int(current_terms_conditions.get("version") or 1):
+            return {
+                "title": str(cached.get("title") or "Terms & Conditions"),
+                "content": str(cached.get("content") or ""),
+                "version": int(cached.get("version") or 1),
+                "published_on": str(cached.get("published_on") or ""),
+            }
+    return dict(current_terms_conditions)
+
+
+def set_terms_conditions(new_terms: Dict[str, Any], persist: bool = True) -> Dict[str, Any]:
+    """Update active Terms & Conditions in memory and optionally persist to preferences.json."""
+    global current_terms_conditions
+    if not isinstance(new_terms, dict) or not str(new_terms.get("content") or "").strip():
+        return get_terms_conditions()
+    clean_terms = {
+        "title": str(new_terms.get("title") or "Terms & Conditions").strip() or "Terms & Conditions",
+        "content": str(new_terms.get("content") or "").strip(),
+        "version": int(new_terms.get("version") or 1),
+        "published_on": str(new_terms.get("published_on") or ""),
+    }
+    current_terms_conditions = clean_terms
+    current_state["terms_cache"] = clean_terms
+    if persist:
+        prefs = load_app_preferences()
+        prefs["terms_cache"] = clean_terms
+        save_app_preferences(prefs)
+    logger.info(f"Terms & Conditions updated to v{clean_terms['version']}.")
+    return dict(clean_terms)
+
+
+def sync_terms_from_remote(dashboard_url: Optional[str] = None) -> Dict[str, Any]:
+    """Fetch latest published Terms & Conditions directly from backend API."""
+    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    endpoint = f"{url}/api/terms-conditions"
+    try:
+        import httpx
+        with httpx.Client(timeout=2.5) as client:
+            resp = client.get(endpoint)
+            if resp.status_code == 200:
+                payload = resp.json()
+                terms_data = payload.get("terms") if isinstance(payload, dict) else None
+                if isinstance(terms_data, dict) and terms_data.get("content"):
+                    return set_terms_conditions(terms_data, persist=True)
+    except Exception as exc:
+        logger.debug(f"Remote terms fetch skipped ({endpoint}): {exc}")
+    return get_terms_conditions()
+
+
+def accept_terms_conditions(version: Optional[int] = None) -> Dict[str, Any]:
+    """Record user acceptance of the specified (or active) Terms & Conditions version."""
+    terms = get_terms_conditions()
+    accepted_ver = int(version if version is not None else terms.get("version", 1))
+    accepted_ts = datetime.now().strftime("%d-%m-%Y %I:%M %p")
+    current_state["accepted_terms_version"] = accepted_ver
+    current_state["accepted_terms_on"] = accepted_ts
+    prefs = load_app_preferences()
+    prefs["accepted_terms_version"] = accepted_ver
+    prefs["accepted_terms_on"] = accepted_ts
+    save_app_preferences(prefs)
+    return {
+        "accepted_version": accepted_ver,
+        "accepted_on": accepted_ts,
+    }
+
+
+DEFAULT_CONTACT_INFO: Dict[str, Any] = {
+    "support_email": "admin@avintrax.com",
+    "support_phone": "+91-8723969733",
+    "company_name": "Avintrax",
+    "software_version": "v1.0.0",
+    "copyright_text": "© 2026 Avintrax. All rights reserved.",
+    "website_url": "https://avintrax.com",
+}
+
+_cached_contact_info: Optional[Dict[str, Any]] = None
+
+
+def get_contact_info() -> Dict[str, Any]:
+    """Return active contact, support & software information."""
+    global _cached_contact_info
+    if _cached_contact_info is not None:
+        return dict(_cached_contact_info)
+
+    cached = current_state.get("contact_cache")
+    if isinstance(cached, dict) and cached.get("support_email"):
+        _cached_contact_info = dict(cached)
+        return dict(_cached_contact_info)
+
+    try:
+        prefs = load_app_preferences()
+        saved_contact = prefs.get("contact_cache")
+        if isinstance(saved_contact, dict) and saved_contact:
+            merged = DEFAULT_CONTACT_INFO.copy()
+            merged.update(saved_contact)
+            _cached_contact_info = merged
+            current_state["contact_cache"] = merged
+            return dict(merged)
+    except Exception:
+        pass
+
+    return dict(DEFAULT_CONTACT_INFO)
+
+
+def set_contact_info(new_contact: Dict[str, Any], persist: bool = True) -> Dict[str, Any]:
+    """Update active contact info in memory and optionally persist to preferences.json."""
+    global _cached_contact_info
+    if not isinstance(new_contact, dict) or not new_contact:
+        return get_contact_info()
+    merged = DEFAULT_CONTACT_INFO.copy()
+    for k in ["support_email", "support_phone", "company_name", "software_version", "copyright_text", "website_url"]:
+        v = new_contact.get(k)
+        if v is not None and str(v).strip():
+            merged[k] = str(v).strip()
+    _cached_contact_info = merged
+    current_state["contact_cache"] = merged
+    if persist:
+        try:
+            prefs = load_app_preferences()
+            prefs["contact_cache"] = merged
+            save_app_preferences(prefs)
+        except Exception:
+            pass
+    logger.info("Contact & Support information updated.")
+    return dict(merged)
+
+
+def sync_contact_from_remote(dashboard_url: Optional[str] = None) -> Dict[str, Any]:
+    """Fetch latest contact information directly from backend API."""
+    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    endpoint = f"{url}/api/contact"
+    try:
+        import httpx
+        with httpx.Client(timeout=2.5) as client:
+            resp = client.get(endpoint)
+            if resp.status_code == 200:
+                payload = resp.json()
+                contact_data = payload.get("contact") if isinstance(payload, dict) else None
+                if isinstance(contact_data, dict) and contact_data:
+                    return set_contact_info(contact_data, persist=True)
+    except Exception as exc:
+        logger.debug(f"Remote contact fetch skipped ({endpoint}): {exc}")
+    return get_contact_info()
 
 # Live Call Billing Worker
 live_call_billing_task: Optional[asyncio.Task] = None

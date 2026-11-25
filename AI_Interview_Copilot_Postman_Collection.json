@@ -1,0 +1,772 @@
+{
+  "info": {
+    "name": "AI Interview Copilot & Central Dashboard APIs",
+    "description": "Complete API collection for the AI Interview Copilot Desktop Software and the Central Credit & Licensing Dashboard.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "dashboard_base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "desktop_base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "app_secret",
+      "value": "your-dashboard-app-secret",
+      "type": "string"
+    },
+    {
+      "key": "pairing_token",
+      "value": "your-desktop-pairing-token",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Central Dashboard - Internal APIs (Desktop Sync)",
+      "description": "APIs consumed by the desktop Interview Tool software for handshake, licensing, vouchers, and referrals.",
+      "item": [
+        {
+          "name": "Startup Check & Handshake",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-App-Secret",
+                "value": "{{app_secret}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuid\": \"f733a8d7-c393-4fe4-a7e9-203a942c2a7f\",\n  \"machine_id\": \"27d031eb-bacc-4dbc-9086-e191b1d373ee\",\n  \"name\": \"Brajesh Pasad\",\n  \"email\": \"brajesh.prasad28@gmail.com\",\n  \"phone\": \"+918723969733\",\n  \"balance\": 392.5,\n  \"transactions\": [\n    {\n      \"id\": \"TXN-551669\",\n      \"type\": \"debit\",\n      \"amount\": 7.5,\n      \"balance_after\": 92.5,\n      \"description\": \"Copilot Session\",\n      \"timestamp\": \"2026-11-25 01:51 AM\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{dashboard_base_url}}/api/app/startup-check",
+              "host": [
+                "{{dashboard_base_url}}"
+              ],
+              "path": [
+                "api",
+                "app",
+                "startup-check"
+              ]
+            },
+            "description": "Validates machine binding, performs live bi-directional transaction & balance sync, returns published billing rates, terms & conditions, managed Groq/Gemini keys, and referral status."
+          }
+        },
+        {
+          "name": "Redeem Credit Voucher Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-App-Secret",
+                "value": "{{app_secret}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"4KTH-J16Q-HLBX-P7AI\",\n  \"uuid\": \"f733a8d7-c393-4fe4-a7e9-203a942c2a7f\",\n  \"machine_id\": \"27d031eb-bacc-4dbc-9086-e191b1d373ee\",\n  \"name\": \"Brajesh Pasad\",\n  \"email\": \"brajesh.prasad28@gmail.com\",\n  \"phone\": \"+918723969733\"\n}"
+            },
+            "url": {
+              "raw": "{{dashboard_base_url}}/api/credits/redeem",
+              "host": [
+                "{{dashboard_base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits",
+                "redeem"
+              ]
+            },
+            "description": "Atomically validates and redeems a 16-character credit voucher for the registered user & hardware device."
+          }
+        },
+        {
+          "name": "Redeem Referral Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-App-Secret",
+                "value": "{{app_secret}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"REF-F733A8\",\n  \"uuid\": \"f733a8d7-c393-4fe4-a7e9-203a942c2a7f\",\n  \"machine_id\": \"27d031eb-bacc-4dbc-9086-e191b1d373ee\",\n  \"name\": \"Friend User\",\n  \"email\": \"friend@example.com\",\n  \"phone\": \"+919876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{dashboard_base_url}}/api/referrals/redeem",
+              "host": [
+                "{{dashboard_base_url}}"
+              ],
+              "path": [
+                "api",
+                "referrals",
+                "redeem"
+              ]
+            },
+            "description": "Redeems a referral code, enforcing 1-per-lifetime rule, daily referrer cap (5/day), and hardware self-referral prevention."
+          }
+        },
+        {
+          "name": "Sync User Profile & APIs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-App-Secret",
+                "value": "{{app_secret}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuid\": \"f733a8d7-c393-4fe4-a7e9-203a942c2a7f\",\n  \"machine_id\": \"27d031eb-bacc-4dbc-9086-e191b1d373ee\",\n  \"name\": \"Brajesh Pasad\",\n  \"email\": \"brajesh.prasad28@gmail.com\",\n  \"phone\": \"+918723969733\",\n  \"groq_api\": \"\",\n  \"genai_api\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{dashboard_base_url}}/api/user/sync",
+              "host": [
+                "{{dashboard_base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "sync"
+              ]
+            },
+            "description": "Synchronizes candidate profile updates and managed API keys to the central dashboard database."
+          }
+        },
+        {
+          "name": "User Account Restore Lookup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-App-Secret",
+                "value": "{{app_secret}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"brajesh.prasad28@gmail.com\",\n  \"machine_id\": \"27d031eb-bacc-4dbc-9086-e191b1d373ee\"\n}"
+            },
+            "url": {
+              "raw": "{{dashboard_base_url}}/api/user/restore-lookup",
+              "host": [
+                "{{dashboard_base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "restore-lookup"
+              ]
+            },
+            "description": "Looks up an existing user profile by email during reinstall/device migration to restore account credits, vouchers, and transactions."
+          }
+        },
+        {
+          "name": "Get Published Billing Rates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dashboard_base_url}}/api/billing-rates",
+              "host": [
+                "{{dashboard_base_url}}"
+              ],
+              "path": [
+                "api",
+                "billing-rates"
+              ]
+            },
+            "description": "Returns active published billing rates for call per minute, screen snap, note count, and referral bonus."
+          }
+        },
+        {
+          "name": "Get Published Terms & Conditions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dashboard_base_url}}/api/terms",
+              "host": [
+                "{{dashboard_base_url}}"
+              ],
+              "path": [
+                "api",
+                "terms"
+              ]
+            },
+            "description": "Fetches the latest published Terms & Conditions version and content."
+          }
+        },
+        {
+          "name": "Get Contact & Support Info (GET /api/contact)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dashboard_base_url}}/api/contact",
+              "host": [
+                "{{dashboard_base_url}}"
+              ],
+              "path": [
+                "api",
+                "contact"
+              ]
+            },
+            "description": "Returns active contact email, phone, company, software version, copyright notice and website."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Desktop Software - Credits & Sync APIs",
+      "description": "Local FastAPI endpoints powering the Credit & History tab and desktop synchronization.",
+      "item": [
+        {
+          "name": "Get Local Credits & History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/credits",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits"
+              ]
+            },
+            "description": "Loads verified local credits balance, referral code, referral status, and complete transaction ledger."
+          }
+        },
+        {
+          "name": "Refresh / Live Sync with Dashboard",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/credits/sync",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits",
+                "sync"
+              ]
+            },
+            "description": "Triggered by the Refresh button in Credit & History tab! Executes handshake with dashboard, synchronizes balance, vouchers, transactions, T&C, rates, and API keys."
+          }
+        },
+        {
+          "name": "Redeem Voucher Code (Desktop)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"XXXX-XXXX-XXXX-XXXX\"\n}"
+            },
+            "url": {
+              "raw": "{{desktop_base_url}}/api/credits/redeem",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits",
+                "redeem"
+              ]
+            },
+            "description": "Submits credit code to dashboard, credits account, and records HMAC-signed transaction."
+          }
+        },
+        {
+          "name": "Redeem Referral Code (Desktop)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"REF-XXXXXX\"\n}"
+            },
+            "url": {
+              "raw": "{{desktop_base_url}}/api/credits/referral/redeem",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "credits",
+                "referral",
+                "redeem"
+              ]
+            },
+            "description": "Applies friend's referral code to claim bonus credit points."
+          }
+        },
+        {
+          "name": "Restore User Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"brajesh.prasad28@gmail.com\"\n}"
+            },
+            "url": {
+              "raw": "{{desktop_base_url}}/api/user/restore",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "restore"
+              ]
+            },
+            "description": "Restores profile, balance, and transaction history from Central Dashboard."
+          }
+        },
+        {
+          "name": "Get Dynamic Billing Rates (Desktop)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/billing-rates",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "billing-rates"
+              ]
+            },
+            "description": "Returns active published billing rates for session duration (per minute), screen captures (snaps), note generation, and referral rewards displayed in Help & User Guide."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Desktop Software - Terms & Settings",
+      "description": "Terms & Conditions acceptance and application configuration endpoints.",
+      "item": [
+        {
+          "name": "Get Terms & Conditions Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/terms",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "terms"
+              ]
+            },
+            "description": "Returns current active T&C, version, and whether user has accepted the latest version."
+          }
+        },
+        {
+          "name": "Accept Terms & Conditions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 1\n}"
+            },
+            "url": {
+              "raw": "{{desktop_base_url}}/api/terms/accept",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "terms",
+                "accept"
+              ]
+            },
+            "description": "Records user acceptance of the latest Terms & Conditions."
+          }
+        },
+        {
+          "name": "Get Application Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/settings",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "settings"
+              ]
+            },
+            "description": "Returns non-sensitive app settings, active model, audio devices, and hotkeys."
+          }
+        },
+        {
+          "name": "Save Application Settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile_name\": \"Brajesh Pasad\",\n  \"profile_email\": \"brajesh.prasad28@gmail.com\",\n  \"profile_phone\": \"+918723969733\",\n  \"ai_provider\": \"gemini\"\n}"
+            },
+            "url": {
+              "raw": "{{desktop_base_url}}/api/settings",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "settings"
+              ]
+            },
+            "description": "Updates user profile, AI configuration, and preferences."
+          }
+        },
+        {
+          "name": "Get Audio Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/devices/audio",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "devices",
+                "audio"
+              ]
+            },
+            "description": "Lists available host microphones and loopback system audio capture devices."
+          }
+        },
+        {
+          "name": "Get Contact & Support Info (GET /api/contact)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/contact",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "contact"
+              ]
+            },
+            "description": "Returns local active contact, software version, support email and copyright notice."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Desktop Software - Copilot & Sessions",
+      "description": "Real-time AI copilot, audio listener, vision snaps, and interview session history.",
+      "item": [
+        {
+          "name": "Get Copilot State",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/copilot/state",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "copilot",
+                "state"
+              ]
+            },
+            "description": "Returns active session duration, credit rate, current transcript, and AI responses."
+          }
+        },
+        {
+          "name": "Start Copilot Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_name\": \"Technical Interview\"\n}"
+            },
+            "url": {
+              "raw": "{{desktop_base_url}}/api/copilot/start",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "copilot",
+                "start"
+              ]
+            },
+            "description": "Initializes audio loopback listener and begins live copilot session with per-minute billing."
+          }
+        },
+        {
+          "name": "Stop Copilot Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/copilot/stop",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "copilot",
+                "stop"
+              ]
+            },
+            "description": "Finalizes audio capture, calculates exact duration, debits credit points, and saves transaction."
+          }
+        },
+        {
+          "name": "Capture Screen Snap",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/copilot/snap",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "copilot",
+                "snap"
+              ]
+            },
+            "description": "Captures focused screen region, runs multimodal AI vision analysis, and debits per-snap credits."
+          }
+        },
+        {
+          "name": "Get Session History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/history",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "history"
+              ]
+            },
+            "description": "Lists past recorded sessions, interview transcripts, and AI answers."
+          }
+        },
+        {
+          "name": "Get Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Pairing-Token",
+                "value": "{{pairing_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{desktop_base_url}}/api/notes",
+              "host": [
+                "{{desktop_base_url}}"
+              ],
+              "path": [
+                "api",
+                "notes"
+              ]
+            },
+            "description": "Retrieves post-session generated summaries and candidate notes."
+          }
+        }
+      ]
+    }
+  ]
+}

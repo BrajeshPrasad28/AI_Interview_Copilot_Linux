@@ -343,6 +343,7 @@
 
         function openHelpView() {
             setHubPanel('help');
+            loadTermsData(false);
         }
 
         function showDashboard() {
@@ -799,6 +800,90 @@
             }
         }
 
+        function applyCreditsDataToUI(data) {
+            if (!data) return;
+            cachedCredits = data;
+
+            // Update live balance in header pill & stat card
+            const headerBadge = document.getElementById('header-credit-points');
+            if (headerBadge) headerBadge.textContent = Number(data.balance ?? 0).toFixed(2);
+
+            const balanceVal = document.getElementById('credit-balance-value');
+            if (balanceVal) balanceVal.textContent = Number(data.balance ?? 0).toFixed(2);
+
+            const userNameEl = document.getElementById('credit-user-name');
+            if (userNameEl) userNameEl.textContent = data.user_name || 'User';
+
+            const userEmailEl = document.getElementById('credit-user-email');
+            if (userEmailEl) userEmailEl.textContent = data.user_email || 'user@example.com';
+
+            // Update Referral Code & Status
+            const myRefEl = document.getElementById('my-referral-code');
+            if (myRefEl) myRefEl.textContent = data.referral_code || 'REF-USER01';
+
+            const refInputContainer = document.getElementById('referral-input-container');
+            const refClaimedBadge = document.getElementById('referral-claimed-badge');
+            if (data.has_redeemed_referral) {
+                if (refInputContainer) refInputContainer.style.display = 'none';
+                if (refClaimedBadge) refClaimedBadge.style.display = 'inline-flex';
+            } else {
+                if (refInputContainer) refInputContainer.style.display = 'flex';
+                if (refClaimedBadge) refClaimedBadge.style.display = 'none';
+            }
+
+            if (data.referral_reward) {
+                const refPtsEl = document.getElementById('referral-reward-pts');
+                if (refPtsEl) refPtsEl.textContent = parseInt(data.referral_reward, 10);
+                const refClaimedPtsEl = document.getElementById('referral-claimed-pts');
+                if (refClaimedPtsEl) refClaimedPtsEl.textContent = parseInt(data.referral_reward, 10);
+            }
+
+            // Update Dynamic Billing Rates in Help & User Guide
+            const rates = data.rates;
+            if (rates) {
+                const callRateEl = document.getElementById('help-rate-call');
+                if (callRateEl) callRateEl.textContent = Number(rates.call_per_minute ?? 2.50).toFixed(2);
+
+                const snapRateEl = document.getElementById('help-rate-snap');
+                if (snapRateEl) snapRateEl.textContent = Number(rates.snap_per_count ?? 5.00).toFixed(2);
+
+                const noteRateEl = document.getElementById('help-rate-note');
+                if (noteRateEl) noteRateEl.textContent = Number(rates.note_per_count ?? 2.00).toFixed(2);
+
+                const refRateEl = document.getElementById('help-rate-referral');
+                if (refRateEl) refRateEl.textContent = `+${parseInt(rates.referral_reward ?? 10, 10)}`;
+            }
+
+            // Update Dynamic Software Version, Contact & Legal info in Help & User Guide
+            const contact = data.contact;
+            if (contact) {
+                const versionEl = document.getElementById('help-software-version');
+                if (versionEl) versionEl.textContent = contact.software_version || 'v1.0.0';
+
+                const versionPill = document.getElementById('help-software-version-pill');
+                if (versionPill) versionPill.textContent = contact.software_version || 'v1.0.0';
+
+                const emailEl = document.getElementById('help-contact-email');
+                if (emailEl) {
+                    const email = contact.support_email || 'admin@avintrax.com';
+                    emailEl.textContent = email;
+                    emailEl.href = `mailto:${email}`;
+                }
+
+                const phoneEl = document.getElementById('help-contact-phone');
+                if (phoneEl) phoneEl.textContent = contact.support_phone || '+91-8723969733';
+
+                const companyEl = document.getElementById('help-company-name');
+                if (companyEl) companyEl.textContent = contact.company_name || 'Avintrax';
+
+                const copyrightEl = document.getElementById('help-copyright-text');
+                if (copyrightEl) copyrightEl.textContent = contact.copyright_text || '© 2026 Avintrax. All rights reserved.';
+            }
+
+            const txs = data.transactions || [];
+            renderCreditTransactions(txs, currentCreditFilter);
+        }
+
         async function loadCreditsData() {
             const list = document.getElementById('credit-history-list');
             try {
@@ -807,49 +892,42 @@
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || 'Could not load credit details.');
-
-                cachedCredits = data;
-
-                // Update live balance in header pill & stat card
-                const headerBadge = document.getElementById('header-credit-points');
-                if (headerBadge) headerBadge.textContent = Number(data.balance ?? 0).toFixed(2);
-
-                const balanceVal = document.getElementById('credit-balance-value');
-                if (balanceVal) balanceVal.textContent = Number(data.balance ?? 0).toFixed(2);
-
-                const userNameEl = document.getElementById('credit-user-name');
-                if (userNameEl) userNameEl.textContent = data.user_name || 'User';
-
-                const userEmailEl = document.getElementById('credit-user-email');
-                if (userEmailEl) userEmailEl.textContent = data.user_email || 'user@example.com';
-
-                // Update Referral Code & Status
-                const myRefEl = document.getElementById('my-referral-code');
-                if (myRefEl) myRefEl.textContent = data.referral_code || 'REF-USER01';
-
-                const refInputContainer = document.getElementById('referral-input-container');
-                const refClaimedBadge = document.getElementById('referral-claimed-badge');
-                if (data.has_redeemed_referral) {
-                    if (refInputContainer) refInputContainer.style.display = 'none';
-                    if (refClaimedBadge) refClaimedBadge.style.display = 'inline-flex';
-                } else {
-                    if (refInputContainer) refInputContainer.style.display = 'flex';
-                    if (refClaimedBadge) refClaimedBadge.style.display = 'none';
-                }
-
-                if (data.referral_reward) {
-                    const refPtsEl = document.getElementById('referral-reward-pts');
-                    if (refPtsEl) refPtsEl.textContent = parseInt(data.referral_reward, 10);
-                    const refClaimedPtsEl = document.getElementById('referral-claimed-pts');
-                    if (refClaimedPtsEl) refClaimedPtsEl.textContent = parseInt(data.referral_reward, 10);
-                }
-
-                const txs = data.transactions || [];
-                renderCreditTransactions(txs, currentCreditFilter);
+                applyCreditsDataToUI(data);
             } catch (err) {
                 if (list) {
                     list.innerHTML = `<p class="history-empty" style="color:#f87171;">Failed to load credits: ${escapeHtml(err.message)}</p>`;
                 }
+            }
+        }
+
+        async function refreshCreditsWithDashboard(btn) {
+            btn = btn || document.getElementById('btn-refresh-credits');
+            if (btn) btn.classList.add('is-refreshing');
+            try {
+                const response = await fetch('/api/credits/sync', {
+                    method: 'POST',
+                    headers: { 'X-Pairing-Token': pairingToken }
+                });
+                const data = await response.json();
+                if (response.ok && data) {
+                    applyCreditsDataToUI(data);
+                    if (data.offline) {
+                        showStealthToast('Unable to refresh');
+                    } else {
+                        showStealthToast('Refreshed successfully');
+                    }
+                    if (typeof loadTermsData === 'function') {
+                        loadTermsData(false);
+                    }
+                } else {
+                    showStealthToast('Unable to refresh');
+                    await loadCreditsData();
+                }
+            } catch (err) {
+                showStealthToast('Unable to refresh');
+                await loadCreditsData();
+            } finally {
+                if (btn) btn.classList.remove('is-refreshing');
             }
         }
 
@@ -2539,6 +2617,77 @@
             }
         });
 
+        let activeTermsVersion = 1;
+
+        async function loadTermsData(forceRefresh = false) {
+            try {
+                const url = forceRefresh ? '/api/terms?refresh=1' : '/api/terms';
+                const response = await fetch(url, {
+                    headers: { 'X-Pairing-Token': pairingToken }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                activeTermsVersion = Number(data.version || 1);
+
+                const titleText = data.title || 'Terms & Conditions';
+                const contentText = data.content || '';
+                const versionText = `v${activeTermsVersion}`;
+                const pubText = data.published_on ? `Updated: ${data.published_on}` : '';
+
+                const helpTitle = document.getElementById('help-terms-title');
+                const helpVer = document.getElementById('help-terms-version');
+                const helpUpdated = document.getElementById('help-terms-updated');
+                const helpBody = document.getElementById('help-terms-content');
+                const acceptedPill = document.getElementById('help-terms-accepted-pill');
+
+                if (helpTitle) helpTitle.textContent = titleText;
+                if (helpVer) helpVer.textContent = versionText;
+                if (helpUpdated) helpUpdated.textContent = pubText;
+                if (helpBody) helpBody.textContent = contentText;
+                if (acceptedPill) acceptedPill.style.display = data.needs_acceptance ? 'none' : 'inline-flex';
+
+                const modal = document.getElementById('terms-acceptance-modal');
+                if (modal && data.needs_acceptance) {
+                    const modalTitle = document.getElementById('modal-terms-title');
+                    const modalVer = document.getElementById('modal-terms-version');
+                    const modalBody = document.getElementById('modal-terms-content');
+                    const agreeBox = document.getElementById('terms-agree-checkbox');
+                    const acceptBtn = document.getElementById('btn-accept-terms');
+                    if (modalTitle) modalTitle.textContent = titleText;
+                    if (modalVer) modalVer.textContent = versionText;
+                    if (modalBody) modalBody.textContent = contentText;
+                    if (agreeBox) agreeBox.checked = false;
+                    if (acceptBtn) acceptBtn.disabled = true;
+                    modal.style.display = 'flex';
+                }
+            } catch (err) {
+                console.warn('Could not load terms:', err);
+            }
+        }
+
+        async function acceptTermsAndContinue() {
+            const btn = document.getElementById('btn-accept-terms');
+            if (btn) btn.disabled = true;
+            try {
+                const response = await fetch('/api/terms/accept', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Pairing-Token': pairingToken
+                    },
+                    body: JSON.stringify({ version: activeTermsVersion })
+                });
+                if (response.ok) {
+                    const modal = document.getElementById('terms-acceptance-modal');
+                    if (modal) modal.style.display = 'none';
+                    const acceptedPill = document.getElementById('help-terms-accepted-pill');
+                    if (acceptedPill) acceptedPill.style.display = 'inline-flex';
+                }
+            } catch (err) {
+                if (btn) btn.disabled = false;
+            }
+        }
+
         /* -------------------------------------------------------------------------
            INITIALIZE ON LOAD
            ------------------------------------------------------------------------- */
@@ -2547,6 +2696,7 @@
             loadProfileSettings();
             loadDashboardNotes();
             loadCreditsData();
+            loadTermsData(false);
             initWebSocket();
             const hash = window.location.hash;
             const viewParam = urlParams.get('view');
