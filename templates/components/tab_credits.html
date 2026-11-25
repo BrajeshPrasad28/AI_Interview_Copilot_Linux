@@ -5,8 +5,8 @@
             <div>
                 <h2 id="credits-title">Credit &amp; History</h2>
             </div>
-            <button type="button" class="btn-icon-only" id="btn-refresh-credits" onclick="refreshCreditsWithDashboard(this)" title="Refresh"
-                aria-label="Refresh">
+            <button type="button" class="btn-icon-only" id="btn-refresh-credits"
+                onclick="refreshCreditsWithDashboard(this)" title="Refresh" aria-label="Refresh">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
@@ -41,8 +41,10 @@
                     <div class="credit-input-group">
                         <input type="text" id="credit-code-input" class="credit-code-input"
                             placeholder="XXXX - XXXX - XXXX - XXXX" maxlength="19" autocomplete="off" spellcheck="false"
-                            oninput="formatCreditCodeInput(this)" onkeydown="if(event.key==='Enter') redeemCreditCode()">
-                        <button type="button" class="btn-action btn-redeem" id="btn-redeem" onclick="redeemCreditCode()">
+                            oninput="formatCreditCodeInput(this)"
+                            onkeydown="if(event.key==='Enter') redeemCreditCode()">
+                        <button type="button" class="btn-action btn-redeem" id="btn-redeem"
+                            onclick="redeemCreditCode()">
                             Redeem
                         </button>
                     </div>
@@ -56,19 +58,23 @@
                 <div class="referral-col-code">
                     <div class="referral-header-row">
                         <span class="referral-badge-pill">Refer &amp; Earn</span>
-                        <span class="referral-subtext">Share with friends &mdash; both get +<span id="referral-reward-pts">10</span> credits!</span>
+                        <span class="referral-subtext">Share with friends &mdash; both get +<span
+                                id="referral-reward-pts">10</span> credits!</span><span class="referral-rules-note"> Max
+                            5 referrals per day.</span>
                     </div>
                     <div class="referral-box-row">
                         <div class="referral-code-display" id="my-referral-code">REF-......</div>
-                        <button type="button" class="btn-icon-copy" id="btn-copy-ref"
-                            onclick="copyReferralCode()" title="Copy referral code" aria-label="Copy referral code">
-                            <svg class="icon-copy-default" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <button type="button" class="btn-icon-copy" id="btn-copy-ref" onclick="copyReferralCode()"
+                            title="Copy referral code" aria-label="Copy referral code">
+                            <svg class="icon-copy-default" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                aria-hidden="true">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
-                            <svg class="icon-copy-check" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display: none;">
+                            <svg class="icon-copy-check" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                aria-hidden="true" style="display: none;">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
                         </button>
