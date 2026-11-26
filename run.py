@@ -8,14 +8,14 @@ import time
 import uvicorn
 from dotenv import load_dotenv
 
-# Linux: use XDG_DATA_HOME (~/.local/share) instead of Windows %APPDATA%
+# Store application data under the Linux XDG data directory.
 _XDG_DATA = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
 APP_DATA_DIR = os.path.join(_XDG_DATA, "InterviewTool")
 os.makedirs(APP_DATA_DIR, exist_ok=True)
 LOG_FILE_PATH = os.path.join(APP_DATA_DIR, "app.log")
 CRASH_LOG_PATH = os.path.join(APP_DATA_DIR, "crash.log")
 
-# In pythonw.exe, stdout and stderr are None; redirect to app.log so errors are never lost
+# Keep diagnostics available when stdout or stderr is not attached.
 if sys.stdout is None:
     try:
         sys.stdout = open(LOG_FILE_PATH, "a", encoding="utf-8", buffering=1)
@@ -200,7 +200,6 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
     class DesktopApi:
         def __init__(self):
             self._window = None
-            self._hwnd = None
             # Default alpha matching default background opacity (61% = ~155 alpha)
             self.current_alpha = 155
             self.click_through = False
@@ -217,25 +216,24 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
             if self._window:
                 self._window.destroy()
 
-        def _apply_layered_alpha(self):
-            if not self._hwnd:
+        def _apply_window_opacity(self):
+            if not self._window or not self._window.native:
                 return
             try:
-                import ctypes
-                GWL_EXSTYLE = -20
-                WS_EX_LAYERED = 0x00080000
-                style = ctypes.windll.user32.GetWindowLongW(self._hwnd, GWL_EXSTYLE)
-                if not (style & WS_EX_LAYERED):
-                    ctypes.windll.user32.SetWindowLongW(self._hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED)
-                ctypes.windll.user32.SetLayeredWindowAttributes(self._hwnd, 0, self.current_alpha, 0x00000002)
+                import gi
+
+                gi.require_version("Gtk", "3.0")
+                from gi.repository import GLib
+
+                GLib.idle_add(self._window.native.set_opacity, self.current_alpha / 255.0)
             except Exception as e:
-                print(f"Error applying layered alpha: {e}")
+                print(f"Error applying window opacity: {e}")
 
         def set_opacity(self, alpha):
             try:
                 val = max(40, min(255, int(alpha)))
                 self.current_alpha = val
-                self._apply_layered_alpha()
+                self._apply_window_opacity()
                 return self.current_alpha
             except Exception as e:
                 print(f"Error setting opacity: {e}")
@@ -247,36 +245,25 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
         def get_opacity(self):
             return self.current_alpha
 
+        def _apply_click_through(self, enabled: bool):
+            if not self._window or not self._window.native:
+                raise RuntimeError("The GTK desktop window is not available.")
+
+            import gi
+
+            gi.require_version("Gtk", "3.0")
+            gi.require_version("Gdk", "3.0")
+            from gi.repository import GLib
+
+            _set_gtk_window_pass_through(
+                self._window.native,
+                enabled,
+                GLib.idle_add,
+            )
+
         def toggle_click_through(self):
             requested_state = not self.click_through
-            if sys.platform.startswith("linux"):
-                if not self._window or not self._window.native:
-                    raise RuntimeError("The GTK desktop window is not available.")
-                import gi
-
-                gi.require_version("Gtk", "3.0")
-                gi.require_version("Gdk", "3.0")
-                from gi.repository import GLib
-
-                _set_gtk_window_pass_through(
-                    self._window.native,
-                    requested_state,
-                    GLib.idle_add,
-                )
-            elif self._hwnd:
-                import ctypes
-
-                GWL_EXSTYLE = -20
-                WS_EX_TRANSPARENT = 0x00000020
-                style = ctypes.windll.user32.GetWindowLongW(self._hwnd, GWL_EXSTYLE)
-                if requested_state:
-                    style |= WS_EX_TRANSPARENT
-                else:
-                    style &= ~WS_EX_TRANSPARENT
-                ctypes.windll.user32.SetWindowLongW(self._hwnd, GWL_EXSTYLE, style)
-            else:
-                raise RuntimeError("Click-through is not available for this window backend.")
-
+            self._apply_click_through(requested_state)
             self.click_through = requested_state
             if self._click_through_timer:
                 self._click_through_timer.cancel()
@@ -291,32 +278,9 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
             """Safety: automatically disable click-through after timeout to prevent lockout."""
             if self.click_through:
                 try:
-                    if sys.platform.startswith("linux"):
-                        if not self._window or not self._window.native:
-                            raise RuntimeError("The GTK desktop window is not available.")
-                        import gi
-
-                        gi.require_version("Gtk", "3.0")
-                        gi.require_version("Gdk", "3.0")
-                        from gi.repository import GLib
-
-                        _set_gtk_window_pass_through(
-                            self._window.native,
-                            False,
-                            GLib.idle_add,
-                        )
-                    elif self._hwnd:
-                        import ctypes
-
-                        GWL_EXSTYLE = -20
-                        WS_EX_TRANSPARENT = 0x00000020
-                        style = ctypes.windll.user32.GetWindowLongW(self._hwnd, GWL_EXSTYLE)
-                        style &= ~WS_EX_TRANSPARENT
-                        ctypes.windll.user32.SetWindowLongW(self._hwnd, GWL_EXSTYLE, style)
-                    else:
-                        raise RuntimeError("Click-through is not available for this window backend.")
-
+                    self._apply_click_through(False)
                     self.click_through = False
+                    self._click_through_timer = None
                     # Notify the frontend to update the button state
                     if self._window:
                         self._window.evaluate_js(
@@ -422,7 +386,7 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
         )
         desktop_api._window = window
 
-        webview.start(on_gui_ready, gui="gtk" if sys.platform.startswith("linux") else "qt")
+        webview.start(on_gui_ready, gui="gtk")
     finally:
         server.should_exit = True
         server_thread.join(timeout=10)
@@ -447,7 +411,10 @@ def acquire_single_instance_lock(app_title: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Realtek HD Audio Universal Service")
+    if not sys.platform.startswith("linux"):
+        raise SystemExit("AI Interview Copilot is supported on Linux only.")
+
+    parser = argparse.ArgumentParser(description="AI Interview Copilot")
     parser.add_argument(
         "--browser",
         action="store_true",
@@ -486,7 +453,7 @@ def main():
     listener_socket = bind_server_socket(host, configured_port)
     port = listener_socket.getsockname()[1]
     os.environ["PORT"] = str(port)
-    # Linux: XDG_DATA_HOME instead of APPDATA
+    # Use the Linux XDG data directory.
     _xdg = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
     app_data_dir = os.path.join(_xdg, "InterviewTool")
     os.makedirs(app_data_dir, exist_ok=True)

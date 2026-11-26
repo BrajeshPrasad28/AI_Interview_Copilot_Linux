@@ -1,12 +1,11 @@
 """
-Linux Audio Loopback — PulseAudio / PipeWire Monitor Source
-Replaces Windows WASAPI loopback with Linux equivalent.
+Linux audio loopback using PulseAudio / PipeWire monitor sources.
 
 How it works on Linux:
 - PulseAudio/PipeWire exposes a "monitor" source for every sink (output device).
   e.g.  "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor"
-- We pick the default sink's monitor and record from it, capturing all system
-  audio — identical to Windows WASAPI loopback — without touching the microphone.
+- We pick the default sink's monitor and record system audio without touching
+  the microphone.
 
 System dependency:
   sudo apt install portaudio19-dev python3-pyaudio   # Debian/Ubuntu
@@ -187,9 +186,8 @@ def _open_pyaudio_monitor_stream(
 
 class SystemAudioLoopback:
     """
-    Linux system audio loopback using PulseAudio/PipeWire monitor source.
-    Equivalent to Windows WASAPI Loopback — captures all system audio (speakers/headphones)
-    without touching the microphone.
+    Captures system audio from a PulseAudio/PipeWire monitor source without
+    capturing microphone input.
     """
 
     def __init__(self, callback: Optional[Callable[[bytes], None]] = None):

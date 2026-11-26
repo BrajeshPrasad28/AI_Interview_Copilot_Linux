@@ -1,16 +1,5 @@
-"""
-Linux Desktop Overlay — Tkinter stealth overlay.
+"""Linux desktop overlay implemented with Tkinter."""
 
-Linux differences vs Windows:
-- SetWindowDisplayAffinity (screen-share exclusion) is Windows-only;
-  not available on Linux. The overlay is still visually transparent
-  but will NOT be excluded from OBS/screenshare on Linux.
-- WS_EX_TOOLWINDOW / WS_EX_NOACTIVATE are Windows-only; replaced
-  with Tkinter's skip_taskbar and type hints for similar UX.
-- WebSocket sync with Interview Copilot server is unchanged.
-"""
-
-import sys
 import json
 import threading
 import tkinter as tk
@@ -24,8 +13,7 @@ class StealthDesktopOverlay:
     - Excluded from taskbar (Linux WM hint).
     - WebSocket sync with Interview Copilot server.
 
-    Note: Screen-share capture exclusion (SetWindowDisplayAffinity) is a
-    Windows-only feature and cannot be replicated on Linux at the app level.
+    The overlay is not excluded from screen sharing or screen recording.
     """
 
     def __init__(self, ws_url=None):
@@ -34,7 +22,7 @@ class StealthDesktopOverlay:
         load_dotenv()
         port = os.getenv("PORT", "").strip()
         if not port:
-            # Linux XDG data dir instead of %APPDATA%
+            # Use the Linux XDG data directory.
             xdg_data = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
             app_data_dir = os.path.join(xdg_data, "InterviewTool")
             try:
@@ -46,7 +34,7 @@ class StealthDesktopOverlay:
         token_param = f"?token={token}" if token else ""
         self.ws_url = ws_url or f"ws://127.0.0.1:{port}/ws{token_param}"
         self.root = tk.Tk()
-        self.root.title("Interview Stealth Overlay")
+        self.root.title("AI Interview Copilot Overlay")
         self.root.geometry("450x600+100+100")
         self.root.attributes("-topmost", True)
         self.alpha = 0.61  # 61% transparent
@@ -69,7 +57,7 @@ class StealthDesktopOverlay:
     def _apply_linux_window_hints(self):
         """Apply Linux-compatible window manager hints for overlay behaviour."""
         try:
-            # Skip taskbar and pager (like WS_EX_TOOLWINDOW on Windows)
+            # Keep the overlay out of the taskbar and pager.
             self.root.wm_attributes("-type", "dock")
         except tk.TclError:
             # Some WMs/display servers don't support -type; fall back gracefully

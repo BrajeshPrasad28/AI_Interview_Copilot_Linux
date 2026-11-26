@@ -94,27 +94,5 @@ class TestDesktopTermsAndConditions(unittest.TestCase):
         self.assertIn("help-terms-content", html)
         self.assertIn("terms-acceptance-modal", html)
 
-    def test_installer_requires_terms_and_conditions(self):
-        """setup.iss configures LicenseFile and installer_core enforces T&C acceptance."""
-        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        terms_txt = os.path.join(root_dir, "TERMS_AND_CONDITIONS.txt")
-        self.assertTrue(os.path.exists(terms_txt), "TERMS_AND_CONDITIONS.txt must exist for installer")
-
-        with open(os.path.join(root_dir, "setup.iss"), "r", encoding="utf-8") as f:
-            iss_content = f.read()
-        self.assertIn("LicenseFile=TERMS_AND_CONDITIONS.txt", iss_content)
-
-        import installer_builder.installer_core as installer_core
-        self.assertTrue(hasattr(installer_core, "fetch_latest_terms_for_installer"))
-        self.assertTrue(hasattr(installer_core, "prompt_terms_acceptance"))
-
-        # Declining terms in installer must abort installation
-        with patch.object(installer_core, "prompt_terms_acceptance", return_value=False), \
-             patch("installer_builder.installer_core.register_in_control_panel") as mock_reg:
-            result = installer_core.install_app(root_dir, target_dir=self.temp_dir)
-            self.assertFalse(result)
-            mock_reg.assert_not_called()
-
-
 if __name__ == "__main__":
     unittest.main()

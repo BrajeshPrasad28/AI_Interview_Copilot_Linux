@@ -4,37 +4,30 @@ A covert, ultra-fast, dual-device AI interview assistant engineered for live tec
 
 Powered by a **Dual-Engine AI architecture (Groq + Gemini 2.5 Flash)** with **PulseAudio/PipeWire system audio loopback**, **real-time screen vision OCR**, and **stealth desktop overlay**.
 
-> **This is the Linux port** of [AI_Interview_Copilot](https://github.com/BrajeshPrasad28/AI_Interview_Copilot) (originally Windows-only).
+Designed for Ubuntu and other Linux desktop distributions.
 
 ---
 
 ## 🌟 Key Highlights
 
 - ⚡ **Sub-Second Answers (< 1s Response):** Uses Groq's high-throughput LPU models for instant answers, with automatic failover to Google Gemini 2.5 Flash.
-- 🎧 **System Audio Loopback (0% Mic Bleed):** Captures audio from your speakers/headphones using **PulseAudio / PipeWire monitor source** (Linux equivalent of Windows WASAPI loopback). Your microphone is never captured.
+- 🎧 **System Audio Loopback (0% Mic Bleed):** Captures audio from your speakers/headphones using a **PulseAudio / PipeWire monitor source**. Your microphone is never captured.
 - 🧠 **Silero VAD (Neural Voice Activity Detection):** ONNX runtime engine with 0% PyTorch bloat. Detects when the interviewer finishes speaking.
 - 📄 **Direct Resume Upload (.pdf / .docx / .txt):** Resume text injected into AI context for STAR-method answers.
 - 🔄 **5-Turn Auto-Truncating Rolling Memory:** Keeps conversational context while pruning older turns for sub-1s latency.
 - 🎙️ **Groq Whisper Transcription:** ~200ms speech-to-text with intelligent silence debouncing.
 - 📸 **Screen Snip & Vision Solver (`Ctrl + Shift + S`):** OCR and coding solution for LeetCode, HackerRank, or system design diagrams.
-- 🪟 **Desktop Overlay:** Transparent always-on-top Tkinter overlay (note: screen-share capture exclusion is Windows-only and not available on Linux).
+- 🖥️ **Desktop Overlay:** Transparent always-on-top Linux desktop overlay.
 - 📱 **Dual-Device Mobile Companion:** Solutions stream silently to your smartphone.
 - 🔒 **Local Network Pairing Security:** All endpoints locked with cryptographically secure 16-byte pairing tokens.
 
 ---
 
-## 🏗️ Linux vs Windows Differences
+## 🏗️ Linux platform notes
 
-| Feature | Windows | Linux |
-|---|---|---|
-| Audio Loopback | WASAPI (PyAudioWPatch) | PulseAudio/PipeWire monitor source (pyaudio) |
-| Screen Capture Exclusion | `SetWindowDisplayAffinity` ✅ | Not available on Linux ❌ |
-| App Data Dir | `%APPDATA%\InterviewTool` | `~/.local/share/InterviewTool` |
-| Machine ID | Windows Registry MachineGuid | `/etc/machine-id` |
-| Desktop Shortcut | `.lnk` file | XDG `.desktop` file |
-| Launcher | `.bat` files | `.sh` shell scripts |
-| WebView Backend | EdgeChromium | GTK + WebKit2 |
-| Instance Lock | Windows Mutex | `fcntl` file lock |
+- The desktop window uses GTK and WebKit2.
+- Application data is stored in `$XDG_DATA_HOME/InterviewTool`, falling back to `~/.local/share/InterviewTool`.
+- Linux does not provide an application-level screen-capture exclusion feature; desktop overlays may appear in screen sharing or recording.
 
 ---
 

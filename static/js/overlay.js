@@ -452,7 +452,7 @@
                 if (btnMic) btnMic.classList.remove('recording');
                 if (micLabel) micLabel.textContent = '🎙️ Hold to Speak';
                 resumeLoopback();
-                alert("Microphone access is not available. Please ensure microphone permissions are granted in Windows.");
+                alert("Microphone access is not available. Please check the desktop app's microphone permissions.");
                 return;
             }
 

@@ -34,7 +34,7 @@ BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.absp
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 
-# Linux: use XDG_DATA_HOME (~/.local/share) instead of Windows %APPDATA%
+# Store application data under the Linux XDG data directory.
 _XDG_DATA = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
 APP_DATA_DIR = os.getenv("INTERVIEW_TOOL_DATA_DIR") or os.path.join(_XDG_DATA, "InterviewTool")
 APP_PREFERENCES_PATH = os.path.join(APP_DATA_DIR, "preferences.json")

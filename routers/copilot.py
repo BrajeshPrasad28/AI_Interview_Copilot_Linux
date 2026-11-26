@@ -50,7 +50,7 @@ async def api_launch_desktop_overlay():
 
 @router.post("/api/loopback/toggle", dependencies=[Depends(verify_pairing_token)])
 async def toggle_loopback(payload: Optional[Dict[str, Any]] = None):
-    """Toggle the Windows System Audio Loopback listener (Interviewer voice only)."""
+    """Toggle the Linux system-audio loopback listener."""
     enable = (payload or {}).get("enable", not loopback_listener.is_running)
     if enable:
         loopback_listener.start()

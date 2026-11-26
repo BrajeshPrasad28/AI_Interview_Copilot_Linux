@@ -57,7 +57,7 @@ from routers.settings import router as settings_router
 async def lifespan(app: FastAPI):
     state.main_event_loop = asyncio.get_running_loop()
     session_history.start_session()
-    logger.info("Realtek HD Audio Universal Service started.")
+    logger.info("AI Interview Copilot started.")
     # Startup check: Handshake with Central Dashboard & sync rates
     asyncio.create_task(asyncio.to_thread(sync_startup_handshake))
     asyncio.create_task(sync_billing_rates_from_remote())
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
     stop_desktop_overlay()
     logger.info("Server shutdown complete.")
 
-app = FastAPI(title="Realtek HD Audio Universal Service", lifespan=lifespan)
+app = FastAPI(title="AI Interview Copilot", lifespan=lifespan)
 
 # Ensure static & template directories exist and mount
 os.makedirs(os.path.join(STATIC_DIR, "css"), exist_ok=True)

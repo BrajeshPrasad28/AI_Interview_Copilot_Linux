@@ -39,7 +39,7 @@ class ScreenSnipper:
             logger.error(f"MSS capture failed: {e2}")
 
         raise RuntimeError(
-            "Screen capture failed. Ensure the application is running in an active interactive Windows desktop session, "
+            "Screen capture failed. Ensure the application is running in an active Linux desktop session, "
             "or upload/paste the screenshot directly in the Mobile Companion web app."
         )
 
