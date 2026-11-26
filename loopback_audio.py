@@ -125,23 +125,64 @@ def _get_default_monitor_source() -> Optional[str]:
 
 def _find_pyaudio_monitor_index(p, monitor_source_name: Optional[str]) -> Optional[int]:
     """
-    Find the PyAudio device index that matches the PulseAudio monitor source name.
-    PulseAudio exposes monitor sources as PyAudio input devices via the ALSA PulseAudio plugin.
+    Find a PyAudio monitor device or the ALSA PulseAudio endpoint.
     """
     try:
         count = p.get_device_count()
         for i in range(count):
             info = p.get_device_info_by_index(i)
-            dev_name = info.get("name", "")
-            # Match by name fragment or look for monitor keyword
-            if monitor_source_name and monitor_source_name in dev_name:
-                if info.get("maxInputChannels", 0) > 0:
-                    return i
-            elif "monitor" in dev_name.lower() and info.get("maxInputChannels", 0) > 0:
+            dev_name = str(info.get("name", ""))
+            if info.get("maxInputChannels", 0) <= 0:
+                continue
+            if monitor_source_name and monitor_source_name.lower() in dev_name.lower():
                 return i
+            if "monitor" in dev_name.lower():
+                return i
+
+        if monitor_source_name:
+            for i in range(count):
+                info = p.get_device_info_by_index(i)
+                if (
+                    str(info.get("name", "")).strip().lower() == "pulse"
+                    and info.get("maxInputChannels", 0) > 0
+                    and p.get_host_api_info_by_index(info["hostApi"]).get("name", "").lower() == "alsa"
+                ):
+                    logger.info(
+                        "Using ALSA PulseAudio endpoint for monitor source '%s'.",
+                        monitor_source_name,
+                    )
+                    return i
     except Exception as e:
         logger.warning(f"Error scanning PyAudio devices: {e}")
     return None
+
+
+def _open_pyaudio_monitor_stream(
+    p,
+    audio_format: int,
+    device_index: int,
+    monitor_source_name: str,
+    channels: int,
+    rate: int,
+    chunk_size: int,
+):
+    """Open the ALSA PulseAudio endpoint with an explicit monitor source."""
+    previous_source = os.environ.get("PULSE_SOURCE")
+    os.environ["PULSE_SOURCE"] = monitor_source_name
+    try:
+        return p.open(
+            format=audio_format,
+            channels=channels,
+            rate=rate,
+            input=True,
+            input_device_index=device_index,
+            frames_per_buffer=chunk_size,
+        )
+    finally:
+        if previous_source is None:
+            os.environ.pop("PULSE_SOURCE", None)
+        else:
+            os.environ["PULSE_SOURCE"] = previous_source
 
 
 class SystemAudioLoopback:
@@ -212,8 +253,8 @@ class SystemAudioLoopback:
 
             if device_index is None:
                 logger.error(
-                    "No PulseAudio monitor source found.\n"
-                    "Make sure PulseAudio or PipeWire-pulse is running and audio is playing.\n"
+                    "Could not map the PulseAudio monitor source to a PortAudio input device.\n"
+                    "Ensure the ALSA PulseAudio plugin is installed and PulseAudio or PipeWire-pulse is running.\n"
                     "Tip: pactl list short sources | grep monitor"
                 )
                 self.is_running = False
@@ -223,6 +264,9 @@ class SystemAudioLoopback:
             device_info = p.get_device_info_by_index(device_index)
             rate = int(device_info.get("defaultSampleRate", 44100))
             channels = max(1, int(device_info.get("maxInputChannels", 2)))
+            uses_alsa_pulse = str(device_info.get("name", "")).strip().lower() == "pulse"
+            if uses_alsa_pulse:
+                channels = min(channels, 2)
             chunk_size = 1024
 
             logger.info(
@@ -230,14 +274,25 @@ class SystemAudioLoopback:
                 f"at {rate}Hz, {channels} channels."
             )
 
-            stream = p.open(
-                format=pyaudio.paInt16,
-                channels=channels,
-                rate=rate,
-                input=True,
-                input_device_index=device_index,
-                frames_per_buffer=chunk_size
-            )
+            if uses_alsa_pulse:
+                stream = _open_pyaudio_monitor_stream(
+                    p,
+                    pyaudio.paInt16,
+                    device_index,
+                    monitor_name,
+                    channels,
+                    rate,
+                    chunk_size,
+                )
+            else:
+                stream = p.open(
+                    format=pyaudio.paInt16,
+                    channels=channels,
+                    rate=rate,
+                    input=True,
+                    input_device_index=device_index,
+                    frames_per_buffer=chunk_size,
+                )
 
             accumulated_frames = []
             is_speaking = False

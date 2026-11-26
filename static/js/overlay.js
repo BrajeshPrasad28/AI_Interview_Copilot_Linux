@@ -787,14 +787,40 @@
 
                 const copyBtn = document.createElement('button');
                 copyBtn.type = 'button';
-                copyBtn.className = 'overlay-note-copy';
-                copyBtn.textContent = 'Copy';
+                copyBtn.className = 'overlay-note-copy btn-icon-copy';
+                copyBtn.innerHTML = `
+                    <svg class="icon-copy-default" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        aria-hidden="true">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <svg class="icon-copy-check" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                        aria-hidden="true" style="display: none;">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>`;
                 copyBtn.title = 'Copy note content';
+                copyBtn.setAttribute('aria-label', 'Copy note content');
                 copyBtn.onclick = (e) => {
                     e.stopPropagation();
-                    navigator.clipboard.writeText(note.content || note.title);
-                    copyBtn.textContent = 'Copied!';
-                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1400);
+                    navigator.clipboard.writeText(note.content || note.title)
+                        .then(() => {
+                            copyBtn.classList.add('copied');
+                            copyBtn.title = 'Copied to clipboard';
+                            copyBtn.setAttribute('aria-label', 'Copied to clipboard');
+                            setTimeout(() => {
+                                if (!copyBtn.isConnected) return;
+                                copyBtn.classList.remove('copied');
+                                copyBtn.title = 'Copy note content';
+                                copyBtn.setAttribute('aria-label', 'Copy note content');
+                            }, 1400);
+                        })
+                        .catch(error => {
+                            console.error('Could not copy note content:', error);
+                            copyBtn.title = 'Could not copy note content';
+                            copyBtn.setAttribute('aria-label', 'Could not copy note content');
+                        });
                 };
 
                 header.append(titleSpan, copyBtn);

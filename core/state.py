@@ -11,6 +11,7 @@ import subprocess
 import sys
 import hmac
 import hashlib
+import math
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
@@ -41,6 +42,7 @@ SESSION_HISTORY_PATH = os.path.join(APP_DATA_DIR, "session_history.json")
 RESUME_DATA_PATH = os.path.join(APP_DATA_DIR, "saved_resume.json")
 NOTES_PATH = os.path.join(APP_DATA_DIR, "notes.json")
 CREDITS_PATH = os.path.join(APP_DATA_DIR, "credits.json")
+LEGACY_STARTER_CODE = "WELCOME-100-STARTER"
 
 session_history = SessionHistory(SESSION_HISTORY_PATH, max_sessions=5)
 
@@ -216,6 +218,90 @@ def save_app_notes(notes: List[Dict[str, Any]]) -> None:
         json.dump(notes, notes_file, ensure_ascii=False, indent=2)
     os.replace(temp_path, NOTES_PATH)
 
+
+def _parse_credit_transaction_time(value: Any) -> Optional[datetime]:
+    timestamp = str(value or "").strip()
+    if not timestamp:
+        return None
+    for date_format in ("%Y-%m-%d %I:%M %p", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %I:%M:%S %p"):
+        try:
+            return datetime.strptime(timestamp, date_format)
+        except ValueError:
+            pass
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None) if parsed.tzinfo else parsed
+    except ValueError:
+        return None
+
+
+def _migrate_legacy_starter_credit(credits_data: Dict[str, Any]) -> bool:
+    transactions = credits_data.get("transactions")
+    if not isinstance(transactions, list):
+        transactions = []
+
+    starter_transactions = [
+        tx for tx in transactions
+        if isinstance(tx, dict)
+        and str(tx.get("code") or "").strip().upper() == LEGACY_STARTER_CODE
+    ]
+    redeemed_codes = credits_data.get("redeemed_codes")
+    if not isinstance(redeemed_codes, list):
+        redeemed_codes = []
+    has_starter_code = any(
+        str(code).strip().upper() == LEGACY_STARTER_CODE
+        for code in redeemed_codes
+    )
+    if not starter_transactions and not has_starter_code:
+        return False
+
+    remaining_transactions = [tx for tx in transactions if tx not in starter_transactions]
+    timestamped = [
+        (_parse_credit_transaction_time(tx.get("timestamp")), index, tx)
+        for index, tx in enumerate(remaining_transactions)
+        if isinstance(tx, dict)
+    ]
+    if len(timestamped) == len(remaining_transactions) and all(item[0] is not None for item in timestamped):
+        ordered_transactions = [
+            item[2] for item in sorted(timestamped, key=lambda item: (item[0], -item[1]))
+        ]
+    else:
+        ordered_transactions = list(reversed(remaining_transactions))
+
+    if starter_transactions:
+        balance = 0.0
+        for tx in ordered_transactions:
+            if not isinstance(tx, dict):
+                continue
+            try:
+                amount = abs(float(tx.get("amount", 0.0)))
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(amount):
+                continue
+            if tx.get("type") == "credit":
+                balance = round(balance + amount, 2)
+            elif tx.get("type") == "debit":
+                balance = max(0.0, round(balance - amount, 2))
+            else:
+                continue
+            tx["balance_after"] = balance
+    else:
+        try:
+            current_balance = float(credits_data.get("balance", 0.0))
+        except (TypeError, ValueError):
+            current_balance = 0.0
+        balance = max(0.0, round(current_balance - 100.0, 2))
+
+    credits_data["balance"] = balance
+    credits_data["transactions"] = remaining_transactions
+    credits_data["redeemed_codes"] = [
+        code for code in redeemed_codes
+        if str(code).strip().upper() != LEGACY_STARTER_CODE
+    ]
+    return True
+
+
 def load_app_credits() -> Dict[str, Any]:
     try:
         if os.path.exists(CREDITS_PATH):
@@ -228,7 +314,9 @@ def load_app_credits() -> Dict[str, Any]:
                         save_app_credits(data)
                         return data
 
-                    changed = False
+                    changed = _migrate_legacy_starter_credit(data)
+                    if changed:
+                        logger.info("Removed the legacy 100-point local starter credit.")
                     for tx in data.get("transactions", []):
                         desc = tx.get("description", "")
                         if "referral" in desc.lower():
@@ -248,23 +336,9 @@ def load_app_credits() -> Dict[str, Any]:
         logger.warning("Could not read credits data: %s", exc)
 
     starter_data = {
-        "balance": 100,
-        "redeemed_codes": ["WELCOME-100-STARTER"],
-        "transactions": [
-            {
-                "id": "TXN-10001",
-                "type": "credit",
-                "amount": 100,
-                "balance_after": 100,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "code": "WELCOME-100-STARTER",
-                "expiry_date": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
-                "description": "Credit Points Added",
-                "user_name": current_state.get("profile_name") or "User",
-                "user_email": current_state.get("profile_email") or "user@example.com",
-                "user_phone": current_state.get("profile_phone") or "N/A"
-            }
-        ]
+        "balance": 0.0,
+        "redeemed_codes": [],
+        "transactions": []
     }
     save_app_credits(starter_data)
     return starter_data

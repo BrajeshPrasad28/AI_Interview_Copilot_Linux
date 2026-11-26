@@ -22,6 +22,7 @@ SystemAudioLoopback.start = lambda self, *args, **kwargs: True
 SystemAudioLoopback.stop = lambda self: None
 
 from core.state import (
+    ai_engine,
     load_app_credits,
     save_app_credits,
     get_billing_rate,
@@ -40,6 +41,14 @@ from routers.copilot import api_trigger_snip
 class TestLiveBillingSystem(unittest.TestCase):
     def setUp(self):
         reset_companion_state()
+        self._original_ai_clients = (ai_engine.client, ai_engine.groq_client)
+        ai_engine.client = object()
+        ai_engine.groq_client = None
+        copilot_session_state.update({
+            "is_active": False,
+            "started_at": None,
+            "session_id": None,
+        })
         # Reset billing rates to default
         set_billing_rates(DEFAULT_BILLING_RATES)
         # Setup clean test credits
@@ -52,6 +61,29 @@ class TestLiveBillingSystem(unittest.TestCase):
 
     def tearDown(self):
         reset_companion_state()
+        ai_engine.client, ai_engine.groq_client = self._original_ai_clients
+
+    def test_session_start_without_ai_access_is_rejected_without_charging(self):
+        ai_engine.client = None
+        ai_engine.groq_client = None
+        for source in ("desktop", "mobile"):
+            if source == "mobile":
+                companion_state["mobile_connected"] = True
+            req = Request({
+                "type": "http",
+                "method": "POST",
+                "headers": [(b"x-device", source.encode("ascii"))]
+            })
+
+            with self.subTest(source=source), self.assertRaises(HTTPException) as ctx:
+                asyncio.run(api_start_session_history(req))
+
+            self.assertEqual(ctx.exception.status_code, 503)
+            self.assertEqual(ctx.exception.detail, "AI access denied. Contact admin.")
+            updated_credits = load_app_credits()
+            self.assertEqual(updated_credits["balance"], self.credits["balance"])
+            self.assertEqual(updated_credits["transactions"], [])
+            self.assertFalse(copilot_session_state["is_active"])
 
     def test_default_billing_rates(self):
         """Default billing rates must be 2.50 call/min, 5.00 snap, 2.00 notes, 500 max chars."""

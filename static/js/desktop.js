@@ -461,6 +461,62 @@
             })[char]);
         }
 
+        const noteCopyIconMarkup = `
+            <svg class="icon-copy-default" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg class="icon-copy-check" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true" style="display: none;">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>`;
+        const noteEditIconMarkup = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
+            </svg>`;
+        const noteDeleteIconMarkup = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6h18"></path>
+                <path d="M8 6V4h8v2"></path>
+                <path d="m19 6-1 14H6L5 6"></path>
+                <path d="M10 11v6M14 11v6"></path>
+            </svg>`;
+        const noteCancelIconMarkup = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m18 6-12 12M6 6l12 12"></path>
+            </svg>`;
+        const noteConfirmIconMarkup = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m5 12 4 4L19 6"></path>
+            </svg>`;
+
+        async function copyNoteContent(button, text) {
+            const copyLabel = button.title || 'Copy note text';
+            try {
+                await navigator.clipboard.writeText(text);
+                button.classList.add('copied');
+                button.title = 'Copied to clipboard';
+                button.setAttribute('aria-label', 'Copied to clipboard');
+                setTimeout(() => {
+                    if (!button.isConnected) return;
+                    button.classList.remove('copied');
+                    button.title = copyLabel;
+                    button.setAttribute('aria-label', copyLabel);
+                }, 1500);
+            } catch (error) {
+                console.error('Could not copy note text:', error);
+                showStealthToast('Could not copy note text.');
+            }
+        }
+
         function openNotesManager() {
             setHubPanel('notes');
             loadDashboardNotes();
@@ -530,21 +586,21 @@
 
                 const copyBtn = document.createElement('button');
                 copyBtn.type = 'button';
-                copyBtn.className = 'btn-note-action';
-                copyBtn.textContent = 'Copy';
+                copyBtn.className = 'btn-note-action btn-icon-copy';
+                copyBtn.innerHTML = noteCopyIconMarkup;
                 copyBtn.title = 'Copy note text';
+                copyBtn.setAttribute('aria-label', 'Copy note text');
                 copyBtn.onclick = (e) => {
                     e.stopPropagation();
-                    navigator.clipboard.writeText(note.content || note.title);
-                    copyBtn.textContent = 'Copied!';
-                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+                    copyNoteContent(copyBtn, note.content || note.title);
                 };
 
                 const editBtn = document.createElement('button');
                 editBtn.type = 'button';
-                editBtn.className = 'btn-note-action';
-                editBtn.textContent = 'Edit';
+                editBtn.className = 'btn-note-action btn-note-icon';
+                editBtn.innerHTML = noteEditIconMarkup;
                 editBtn.title = 'Edit this note';
+                editBtn.setAttribute('aria-label', 'Edit this note');
                 editBtn.onclick = (e) => {
                     e.stopPropagation();
                     editNote(note.id);
@@ -552,15 +608,62 @@
 
                 const delBtn = document.createElement('button');
                 delBtn.type = 'button';
-                delBtn.className = 'btn-note-action btn-note-delete';
-                delBtn.textContent = 'Delete';
+                delBtn.className = 'btn-note-action btn-note-icon btn-note-delete';
+                delBtn.innerHTML = noteDeleteIconMarkup;
                 delBtn.title = 'Delete this note';
+                delBtn.setAttribute('aria-label', 'Delete this note');
+
+                const deleteConfirmActions = document.createElement('div');
+                deleteConfirmActions.className = 'note-delete-confirm-actions is-hidden';
+
+                const cancelDeleteBtn = document.createElement('button');
+                cancelDeleteBtn.type = 'button';
+                cancelDeleteBtn.className = 'btn-note-action btn-note-icon btn-note-cancel';
+                cancelDeleteBtn.innerHTML = noteCancelIconMarkup;
+                cancelDeleteBtn.title = 'Cancel deletion';
+                cancelDeleteBtn.setAttribute('aria-label', 'Cancel deletion');
+
+                const confirmDeleteBtn = document.createElement('button');
+                confirmDeleteBtn.type = 'button';
+                confirmDeleteBtn.className = 'btn-note-action btn-note-icon btn-note-confirm';
+                confirmDeleteBtn.innerHTML = noteConfirmIconMarkup;
+                confirmDeleteBtn.title = 'Confirm deletion';
+                confirmDeleteBtn.setAttribute('aria-label', 'Confirm deletion');
+
+                deleteConfirmActions.append(cancelDeleteBtn, confirmDeleteBtn);
+                let deleteConfirmTimer = null;
+                const resetDeleteConfirmation = () => {
+                    clearTimeout(deleteConfirmTimer);
+                    deleteConfirmTimer = null;
+                    copyBtn.classList.remove('is-hidden');
+                    editBtn.classList.remove('is-hidden');
+                    delBtn.classList.remove('is-hidden');
+                    deleteConfirmActions.classList.add('is-hidden');
+                    confirmDeleteBtn.disabled = false;
+                };
                 delBtn.onclick = (e) => {
                     e.stopPropagation();
-                    deleteNote(note.id);
+                    copyBtn.classList.add('is-hidden');
+                    editBtn.classList.add('is-hidden');
+                    delBtn.classList.add('is-hidden');
+                    deleteConfirmActions.classList.remove('is-hidden');
+                    deleteConfirmTimer = setTimeout(() => {
+                        if (!delBtn.isConnected) return;
+                        resetDeleteConfirmation();
+                    }, 5000);
+                };
+                cancelDeleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    resetDeleteConfirmation();
+                };
+                confirmDeleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    clearTimeout(deleteConfirmTimer);
+                    confirmDeleteBtn.disabled = true;
+                    deleteNote(note.id, resetDeleteConfirmation);
                 };
 
-                actions.append(copyBtn, editBtn, delBtn);
+                actions.append(copyBtn, editBtn, delBtn, deleteConfirmActions);
                 header.append(expandBtn, actions);
 
                 const body = document.createElement('div');
@@ -679,8 +782,7 @@
             }
         }
 
-        async function deleteNote(id) {
-            if (!confirm('Are you sure you want to delete this note?')) return;
+        async function deleteNote(id, resetConfirmation) {
             try {
                 const res = await fetch(`/api/notes/${encodeURIComponent(id)}`, {
                     method: 'DELETE',
@@ -692,10 +794,12 @@
                     renderDashboardNotesList(cachedNotes);
                     renderCopilotNotes(cachedNotes);
                 } else {
-                    alert(data.detail || 'Could not delete note.');
+                    resetConfirmation();
+                    showStealthToast(data.detail || 'Could not delete note.');
                 }
             } catch (err) {
-                alert(`Error deleting note: ${err.message}`);
+                resetConfirmation();
+                showStealthToast(`Error deleting note: ${err.message}`);
             }
         }
 
@@ -735,13 +839,13 @@
 
                 const copyBtn = document.createElement('button');
                 copyBtn.type = 'button';
-                copyBtn.className = 'overlay-note-copy';
-                copyBtn.textContent = 'Copy';
+                copyBtn.className = 'overlay-note-copy btn-icon-copy';
+                copyBtn.innerHTML = noteCopyIconMarkup;
+                copyBtn.title = 'Copy note content';
+                copyBtn.setAttribute('aria-label', 'Copy note content');
                 copyBtn.onclick = (e) => {
                     e.stopPropagation();
-                    navigator.clipboard.writeText(note.content || note.title);
-                    copyBtn.textContent = 'Copied!';
-                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1400);
+                    copyNoteContent(copyBtn, note.content || note.title);
                 };
 
                 header.append(titleSpan, copyBtn);
@@ -775,7 +879,7 @@
         /* -------------------------------------------------------------------------
            CREDIT & HISTORY MANAGEMENT (VOUCHERS, TRANSACTIONS & LIVE BALANCES)
            ------------------------------------------------------------------------- */
-        let cachedCredits = { balance: 100, transactions: [] };
+        let cachedCredits = { balance: 0, transactions: [] };
         let currentCreditFilter = 'all';
 
         function openCreditsView() {
@@ -1503,12 +1607,11 @@
                     if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
                         const errMsg = errData.detail || 'Unable to start copilot session.';
-                        alert(errMsg);
                         showStealthToast(`⚠️ ${errMsg}`);
                         return;
                     }
                 } catch (e) {
-                    alert('Error starting session: ' + e.message);
+                    showStealthToast('Error starting session: ' + e.message);
                     return;
                 }
                 startCopilotTimer(true, explicitStartTime);
@@ -2588,6 +2691,9 @@
                     showStealthToast(isActive ? 'Click-Through: ON — Press Ctrl+M to disable (auto-off in 30s)' : 'Click-Through: Off (Normal clicks)');
                     const btns = document.querySelectorAll('.btn-click-through');
                     btns.forEach(b => b.classList.toggle('active', Boolean(isActive)));
+                }).catch(error => {
+                    console.error('Could not toggle click-through:', error);
+                    showStealthToast(`Click-Through unavailable: ${error.message || error}`);
                 });
             } else {
                 showStealthToast('Click-Through: Desktop overlay mode');

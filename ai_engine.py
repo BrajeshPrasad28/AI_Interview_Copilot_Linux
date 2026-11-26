@@ -12,6 +12,9 @@ load_dotenv()
 logger = logging.getLogger("ai_engine")
 logging.basicConfig(level=logging.INFO)
 
+AI_ACCESS_DENIED_MESSAGE = "AI access denied. Contact admin."
+
+
 class InterviewAIEngine:
     """
     Dual-Provider Intelligent Reasoning Engine powered by Groq & Google Gemini.
@@ -447,7 +450,7 @@ class InterviewAIEngine:
         if not self.groq_client and not self.client:
             return {
                 "success": False,
-                "error": "No AI API keys configured. Please add your Groq or Gemini API key in Settings."
+                "error": AI_ACCESS_DENIED_MESSAGE
             }
 
         system_instruction = self._build_system_instruction(mode)
@@ -496,7 +499,7 @@ class InterviewAIEngine:
             if not self.api_key:
                 return {
                     "success": False,
-                    "error": "API key is invalid or unauthorized. Please connect admin."
+                    "error": AI_ACCESS_DENIED_MESSAGE
                 }
             self.initialize_gemini()
             if not self.client:

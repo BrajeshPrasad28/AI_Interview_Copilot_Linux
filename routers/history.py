@@ -2,8 +2,10 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from ai_engine import AI_ACCESS_DENIED_MESSAGE
 from core.state import (
     verify_pairing_token,
+    ai_engine,
     session_history,
     reset_session_metrics,
     session_metrics,
@@ -41,6 +43,9 @@ async def api_start_session_history(request: Request):
     # Protection: Disconnected mobile companion cannot start a session
     if source == "mobile" and not companion_state.get("mobile_connected"):
         raise HTTPException(status_code=403, detail="Mobile companion is disconnected. Scan QR code to pair.")
+
+    if not (ai_engine.client or ai_engine.groq_client):
+        raise HTTPException(status_code=503, detail=AI_ACCESS_DENIED_MESSAGE)
 
     # Billing Pre-check: Check if user has enough balance for at least 1 minute
     call_rate = get_billing_rate("call_per_minute")

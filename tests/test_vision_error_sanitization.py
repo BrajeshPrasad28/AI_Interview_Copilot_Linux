@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from ai_engine import InterviewAIEngine
+from ai_engine import AI_ACCESS_DENIED_MESSAGE, InterviewAIEngine
 
 
 class TestVisionErrorSanitization(unittest.TestCase):
@@ -56,6 +56,15 @@ class TestVisionErrorSanitization(unittest.TestCase):
         self.assertNotIn("code': 500", cleaned)
         self.assertIn("Internal worker failed unexpectedly", cleaned)
 
+    def test_ask_question_without_provider_returns_admin_access_error(self):
+        self.engine.client = None
+        self.engine.groq_client = None
+
+        result = self.engine.ask_question("How do I reverse a linked list?")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error"], AI_ACCESS_DENIED_MESSAGE)
+
     def test_solve_screen_snip_returns_sanitized_error_on_deadline_timeout(self):
         # Mock client to raise 504 Deadline Exceeded
         fake_client = MagicMock()
@@ -83,7 +92,7 @@ class TestVisionErrorSanitization(unittest.TestCase):
         self.engine.api_key = ""
         result = self.engine.solve_screen_snip(b"some_bytes")
         self.assertFalse(result["success"])
-        self.assertEqual(result["error"], "API key is invalid or unauthorized. Please connect admin.")
+        self.assertEqual(result["error"], AI_ACCESS_DENIED_MESSAGE)
         self.assertNotIn("Gemini", result["error"])
 
 

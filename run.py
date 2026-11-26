@@ -69,7 +69,94 @@ def bind_server_socket(host: str, preferred_port: int | None = None) -> socket.s
     listener.setblocking(False)
     return listener
 
+
+def _set_gtk_window_pass_through(native_window, enabled: bool, idle_add, timeout: float = 5.0) -> None:
+    completed = threading.Event()
+    cancelled = threading.Event()
+    errors = []
+
+    def apply_pass_through():
+        if cancelled.is_set():
+            return False
+        try:
+            gdk_window = native_window.get_window()
+            if gdk_window is None:
+                raise RuntimeError("The GTK window is not realized yet.")
+            gdk_window.set_pass_through(enabled)
+            if gdk_window.get_pass_through() != enabled:
+                raise RuntimeError("GTK did not apply the requested click-through state.")
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            completed.set()
+        return False
+
+    idle_add(apply_pass_through)
+    if not completed.wait(timeout):
+        cancelled.set()
+        raise RuntimeError("Timed out while applying GTK click-through.")
+    if errors:
+        raise RuntimeError(f"Could not update GTK click-through: {errors[0]}") from errors[0]
+
+
+def _prepare_linux_gtk_environment() -> None:
+    if not sys.platform.startswith("linux"):
+        return
+
+    # Avoid loading GTK schemas and modules bundled by a Snap-hosted editor.
+    snap_code_roots = (
+        os.path.realpath(os.path.join(os.path.expanduser("~"), "snap", "code")),
+        os.path.realpath("/snap/code"),
+    )
+
+    def is_snap_code_path(path: str) -> bool:
+        if not path:
+            return False
+        resolved = os.path.realpath(path)
+        return any(
+            resolved == root or os.path.commonpath((root, resolved)) == root
+            for root in snap_code_roots
+        )
+
+    schema_dir = os.environ.get("GSETTINGS_SCHEMA_DIR", "")
+    if is_snap_code_path(schema_dir):
+        system_schema_dir = "/usr/share/glib-2.0/schemas"
+        if not os.path.isdir(system_schema_dir):
+            raise RuntimeError(f"Host GSettings schemas were not found in {system_schema_dir}.")
+        os.environ["GSETTINGS_SCHEMA_DIR"] = system_schema_dir
+
+    gtk_path_variables = (
+        "GIO_MODULE_DIR",
+        "GIO_EXTRA_MODULES",
+        "GTK_EXE_PREFIX",
+        "GTK_PATH",
+        "GTK_DATA_PREFIX",
+        "GDK_PIXBUF_MODULEDIR",
+        "GDK_PIXBUF_MODULE_FILE",
+        "GTK_IM_MODULE_FILE",
+    )
+    for variable in gtk_path_variables:
+        value = os.environ.get(variable)
+        if not value:
+            continue
+        entries = value.split(os.pathsep)
+        host_entries = [entry for entry in entries if not is_snap_code_path(entry)]
+        if len(host_entries) != len(entries):
+            if host_entries:
+                os.environ[variable] = os.pathsep.join(host_entries)
+            else:
+                os.environ.pop(variable, None)
+
+    # pywebview's GTK easy-drag uses Gtk.Window.move, which Wayland does not support.
+    if os.environ.get("WAYLAND_DISPLAY") and os.environ.get("DISPLAY"):
+        backends = [item.strip().lower() for item in os.environ.get("GDK_BACKEND", "").split(",")]
+        if not backends or backends[0] != "x11":
+            os.environ["GDK_BACKEND"] = "x11,wayland"
+
+
 def start_desktop_window(dashboard_url: str, host: str, port: int, listener_socket: socket.socket):
+    _prepare_linux_gtk_environment()
+
     try:
         import webview
     except ImportError as exc:
@@ -124,6 +211,9 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
                 self._window.minimize()
 
         def close(self):
+            if self._click_through_timer:
+                self._click_through_timer.cancel()
+                self._click_through_timer = None
             if self._window:
                 self._window.destroy()
 
@@ -158,43 +248,75 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
             return self.current_alpha
 
         def toggle_click_through(self):
-            try:
+            requested_state = not self.click_through
+            if sys.platform.startswith("linux"):
+                if not self._window or not self._window.native:
+                    raise RuntimeError("The GTK desktop window is not available.")
+                import gi
+
+                gi.require_version("Gtk", "3.0")
+                gi.require_version("Gdk", "3.0")
+                from gi.repository import GLib
+
+                _set_gtk_window_pass_through(
+                    self._window.native,
+                    requested_state,
+                    GLib.idle_add,
+                )
+            elif self._hwnd:
                 import ctypes
+
                 GWL_EXSTYLE = -20
                 WS_EX_TRANSPARENT = 0x00000020
-                self.click_through = not self.click_through
-                if self._hwnd:
-                    style = ctypes.windll.user32.GetWindowLongW(self._hwnd, GWL_EXSTYLE)
-                    if self.click_through:
-                        style |= WS_EX_TRANSPARENT
-                    else:
-                        style &= ~WS_EX_TRANSPARENT
-                    ctypes.windll.user32.SetWindowLongW(self._hwnd, GWL_EXSTYLE, style)
-                # Auto-disable safety: if click-through is on, schedule auto-off after 30s
-                if self._click_through_timer:
-                    self._click_through_timer.cancel()
-                    self._click_through_timer = None
-                if self.click_through:
-                    self._click_through_timer = threading.Timer(30.0, self._auto_disable_click_through)
-                    self._click_through_timer.daemon = True
-                    self._click_through_timer.start()
-                return self.click_through
-            except Exception as e:
-                print(f"Error toggling click-through: {e}")
-                return False
+                style = ctypes.windll.user32.GetWindowLongW(self._hwnd, GWL_EXSTYLE)
+                if requested_state:
+                    style |= WS_EX_TRANSPARENT
+                else:
+                    style &= ~WS_EX_TRANSPARENT
+                ctypes.windll.user32.SetWindowLongW(self._hwnd, GWL_EXSTYLE, style)
+            else:
+                raise RuntimeError("Click-through is not available for this window backend.")
+
+            self.click_through = requested_state
+            if self._click_through_timer:
+                self._click_through_timer.cancel()
+                self._click_through_timer = None
+            if self.click_through:
+                self._click_through_timer = threading.Timer(30.0, self._auto_disable_click_through)
+                self._click_through_timer.daemon = True
+                self._click_through_timer.start()
+            return self.click_through
 
         def _auto_disable_click_through(self):
             """Safety: automatically disable click-through after timeout to prevent lockout."""
             if self.click_through:
                 try:
-                    import ctypes
-                    GWL_EXSTYLE = -20
-                    WS_EX_TRANSPARENT = 0x00000020
-                    self.click_through = False
-                    if self._hwnd:
+                    if sys.platform.startswith("linux"):
+                        if not self._window or not self._window.native:
+                            raise RuntimeError("The GTK desktop window is not available.")
+                        import gi
+
+                        gi.require_version("Gtk", "3.0")
+                        gi.require_version("Gdk", "3.0")
+                        from gi.repository import GLib
+
+                        _set_gtk_window_pass_through(
+                            self._window.native,
+                            False,
+                            GLib.idle_add,
+                        )
+                    elif self._hwnd:
+                        import ctypes
+
+                        GWL_EXSTYLE = -20
+                        WS_EX_TRANSPARENT = 0x00000020
                         style = ctypes.windll.user32.GetWindowLongW(self._hwnd, GWL_EXSTYLE)
                         style &= ~WS_EX_TRANSPARENT
                         ctypes.windll.user32.SetWindowLongW(self._hwnd, GWL_EXSTYLE, style)
+                    else:
+                        raise RuntimeError("Click-through is not available for this window backend.")
+
+                    self.click_through = False
                     # Notify the frontend to update the button state
                     if self._window:
                         self._window.evaluate_js(
@@ -299,8 +421,8 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
             js_api=desktop_api,
         )
         desktop_api._window = window
-        # Linux: use GTK backend (requires python3-gi and webkit2gtk)
-        webview.start(on_gui_ready, gui="gtk")
+
+        webview.start(on_gui_ready, gui="gtk" if sys.platform.startswith("linux") else "qt")
     finally:
         server.should_exit = True
         server_thread.join(timeout=10)
