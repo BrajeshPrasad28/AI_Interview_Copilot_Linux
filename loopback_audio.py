@@ -1,15 +1,32 @@
+"""
+Linux Audio Loopback — PulseAudio / PipeWire Monitor Source
+Replaces Windows WASAPI loopback with Linux equivalent.
+
+How it works on Linux:
+- PulseAudio/PipeWire exposes a "monitor" source for every sink (output device).
+  e.g.  "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor"
+- We pick the default sink's monitor and record from it, capturing all system
+  audio — identical to Windows WASAPI loopback — without touching the microphone.
+
+System dependency:
+  sudo apt install portaudio19-dev python3-pyaudio   # Debian/Ubuntu
+  sudo dnf install portaudio-devel python3-pyaudio   # Fedora
+"""
+
 import os
 import threading
 import time
 import io
 import wave
 import logging
+import subprocess
 from collections import deque
 from typing import Callable, Optional
 import numpy as np
 
 logger = logging.getLogger("loopback_audio")
 logging.basicConfig(level=logging.INFO)
+
 
 class SileroVAD:
     """
@@ -66,46 +83,95 @@ class SileroVAD:
         except Exception:
             return False
 
+
+def _get_default_monitor_source() -> Optional[str]:
+    """
+    Query PulseAudio/PipeWire for the monitor source of the default sink.
+    Returns the source name string (e.g. 'alsa_output.*.analog-stereo.monitor')
+    or None if not found.
+    """
+    # Try pactl (PulseAudio / PipeWire-pulse)
+    try:
+        result = subprocess.run(
+            ["pactl", "get-default-sink"],
+            capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            sink_name = result.stdout.strip()
+            if sink_name:
+                monitor_name = sink_name + ".monitor"
+                logger.info(f"Using PulseAudio monitor source: {monitor_name}")
+                return monitor_name
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Fallback: list all sources and pick first monitor
+    try:
+        result = subprocess.run(
+            ["pactl", "list", "short", "sources"],
+            capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 2 and "monitor" in parts[1].lower():
+                    logger.info(f"Using fallback monitor source: {parts[1]}")
+                    return parts[1]
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    return None
+
+
+def _find_pyaudio_monitor_index(p, monitor_source_name: Optional[str]) -> Optional[int]:
+    """
+    Find the PyAudio device index that matches the PulseAudio monitor source name.
+    PulseAudio exposes monitor sources as PyAudio input devices via the ALSA PulseAudio plugin.
+    """
+    try:
+        count = p.get_device_count()
+        for i in range(count):
+            info = p.get_device_info_by_index(i)
+            dev_name = info.get("name", "")
+            # Match by name fragment or look for monitor keyword
+            if monitor_source_name and monitor_source_name in dev_name:
+                if info.get("maxInputChannels", 0) > 0:
+                    return i
+            elif "monitor" in dev_name.lower() and info.get("maxInputChannels", 0) > 0:
+                return i
+    except Exception as e:
+        logger.warning(f"Error scanning PyAudio devices: {e}")
+    return None
+
+
 class SystemAudioLoopback:
+    """
+    Linux system audio loopback using PulseAudio/PipeWire monitor source.
+    Equivalent to Windows WASAPI Loopback — captures all system audio (speakers/headphones)
+    without touching the microphone.
+    """
+
     def __init__(self, callback: Optional[Callable[[bytes], None]] = None):
         self.callback = callback
         self.is_running = False
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
-        self.speech_threshold = 160.0  # RMS threshold for system playback
-        self.silence_duration = 1.35   # 1.35s silence to finalize (natural pause allowance)
-        self.min_speech_duration = 0.45 # Min seconds of speech to capture short questions
+        self.speech_threshold = 160.0   # RMS threshold
+        self.silence_duration = 1.35    # 1.35s silence to finalize
+        self.min_speech_duration = 0.45 # Min seconds of speech
         self.vad = SileroVAD()
         self.use_neural_vad = True
-
-    def get_loopback_device(self, p):
-        """Find default WASAPI playback device's loopback endpoint."""
-        try:
-            import pyaudiowpatch as pyaudio
-            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
-            default_speakers = p.get_device_info_by_index(wasapi_info['defaultOutputDevice'])
-            
-            for dev in p.get_loopback_device_info_generator():
-                if default_speakers['name'] in dev['name']:
-                    return dev
-            # Fallback to first available loopback device
-            for dev in p.get_loopback_device_info_generator():
-                return dev
-        except Exception as e:
-            logger.error(f"Error finding loopback device: {e}")
-        return None
 
     def start(self, callback: Optional[Callable[[bytes], None]] = None):
         """Start listening to system audio in background thread."""
         with self._lock:
             if callback:
                 self.callback = callback
-                
+
             if self.is_running and self._thread and self._thread.is_alive():
                 logger.info("Loopback listener is already running.")
                 return True
 
-            # If previous thread is still shutting down, wait for it
             self.is_running = False
             if self._thread and self._thread.is_alive():
                 self._thread.join(timeout=1.5)
@@ -126,32 +192,50 @@ class SystemAudioLoopback:
             logger.info("System Audio Loopback Listener stopped.")
 
     def _capture_loop(self):
-        """Background worker thread capturing audio chunks and detecting speech."""
-        import pyaudiowpatch as pyaudio
+        """Background worker: capture audio from PulseAudio monitor source."""
+        try:
+            import pyaudio
+        except ImportError:
+            logger.error(
+                "pyaudio not installed. Run: pip install pyaudio\n"
+                "Also install system lib: sudo apt install portaudio19-dev"
+            )
+            self.is_running = False
+            return
 
         p = pyaudio.PyAudio()
         stream = None
 
         try:
-            device = self.get_loopback_device(p)
-            if not device:
-                logger.error("No WASAPI loopback device found on this system.")
+            monitor_name = _get_default_monitor_source()
+            device_index = _find_pyaudio_monitor_index(p, monitor_name)
+
+            if device_index is None:
+                logger.error(
+                    "No PulseAudio monitor source found.\n"
+                    "Make sure PulseAudio or PipeWire-pulse is running and audio is playing.\n"
+                    "Tip: pactl list short sources | grep monitor"
+                )
                 self.is_running = False
                 p.terminate()
                 return
 
-            rate = int(device['defaultSampleRate'])
-            channels = int(device['maxInputChannels'])
+            device_info = p.get_device_info_by_index(device_index)
+            rate = int(device_info.get("defaultSampleRate", 44100))
+            channels = max(1, int(device_info.get("maxInputChannels", 2)))
             chunk_size = 1024
 
-            logger.info(f"Opening loopback stream on '{device['name']}' at {rate}Hz, {channels} channels.")
+            logger.info(
+                f"🎧 Opening loopback stream on '{device_info['name']}' "
+                f"at {rate}Hz, {channels} channels."
+            )
 
             stream = p.open(
                 format=pyaudio.paInt16,
                 channels=channels,
                 rate=rate,
                 input=True,
-                input_device_index=device['index'],
+                input_device_index=device_index,
                 frames_per_buffer=chunk_size
             )
 
@@ -160,10 +244,8 @@ class SystemAudioLoopback:
             silence_start: Optional[float] = None
             speech_start: Optional[float] = None
 
-            # Pre-roll circular buffer keeps ~0.35s of prior audio so first syllables are never cut
+            # Pre-roll: ~0.35s of prior audio so first syllable is never cut
             pre_roll_buffer = deque(maxlen=16)
-            
-            # Buffer for exact 512-sample chunks fed to Silero VAD
             vad_audio_buffer = np.zeros(0, dtype=np.float32)
 
             while self.is_running:
@@ -179,7 +261,7 @@ class SystemAudioLoopback:
                 if len(data_np) == 0:
                     continue
 
-                # 1. Downsample and convert to mono float32 for Silero VAD
+                # Downsample and convert to mono float32 for Silero VAD
                 if channels > 1:
                     mono_16 = data_np.reshape(-1, channels).mean(axis=1).astype(np.int16)
                 else:
@@ -196,8 +278,7 @@ class SystemAudioLoopback:
                 mono_float = mono_16k.astype(np.float32) / 32768.0
                 vad_audio_buffer = np.concatenate([vad_audio_buffer, mono_float])
 
-                # 2. Dual-Detection: Neural VAD + RMS Energy
-                # When loopback speakers are silent, RMS is near 0. Speech typically > 160.
+                # Dual-Detection: Neural VAD + RMS Energy
                 rms = float(np.sqrt(np.mean(data_np.astype(np.float64)**2)))
                 rms_speech = rms > self.speech_threshold
 
@@ -216,7 +297,6 @@ class SystemAudioLoopback:
                     if not is_speaking:
                         is_speaking = True
                         speech_start = now
-                        # Prepend pre-roll buffer so the beginning words ("What", "Explain", etc.) are intact
                         accumulated_frames = list(pre_roll_buffer)
                         pre_roll_buffer.clear()
                     silence_start = None
@@ -226,10 +306,12 @@ class SystemAudioLoopback:
                     if silence_start is None:
                         silence_start = now
                     elif now - silence_start >= self.silence_duration:
-                        # Finished speaking
                         total_speech_time = (now - speech_start) if speech_start else 0.0
                         if total_speech_time >= self.min_speech_duration:
-                            logger.info(f"🎧 Interviewer speech detected! Total duration: {total_speech_time:.2f}s. Processing question...")
+                            logger.info(
+                                f"🎧 Interviewer speech detected! "
+                                f"Duration: {total_speech_time:.2f}s. Processing..."
+                            )
                             wav_bytes = self._encode_to_wav(accumulated_frames, channels, rate)
                             if self.callback and wav_bytes:
                                 try:
@@ -237,7 +319,6 @@ class SystemAudioLoopback:
                                 except Exception as cb_err:
                                     logger.error(f"Error in speech callback: {cb_err}")
 
-                        # Reset state
                         is_speaking = False
                         silence_start = None
                         speech_start = None
@@ -245,7 +326,6 @@ class SystemAudioLoopback:
                         vad_audio_buffer = np.zeros(0, dtype=np.float32)
                         self.vad.reset_states()
                 else:
-                    # Keep rolling history while quiet
                     pre_roll_buffer.append(raw_data)
 
         except Exception as e:
@@ -271,10 +351,8 @@ class SystemAudioLoopback:
             data_np = np.frombuffer(raw_all, dtype=np.int16)
 
             if channels > 1:
-                # Average multi-channels to mono
                 data_np = data_np.reshape(-1, channels).mean(axis=1).astype(np.int16)
 
-            # High-fidelity linear resample to clean 16000Hz
             if original_rate != 16000 and len(data_np) > 1:
                 num_target_samples = int(len(data_np) * 16000 / original_rate)
                 indices = np.linspace(0, len(data_np) - 1, num_target_samples).astype(np.int64)

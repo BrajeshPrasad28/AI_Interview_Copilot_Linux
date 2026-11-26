@@ -8,7 +8,9 @@ import time
 import uvicorn
 from dotenv import load_dotenv
 
-APP_DATA_DIR = os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "InterviewTool")
+# Linux: use XDG_DATA_HOME (~/.local/share) instead of Windows %APPDATA%
+_XDG_DATA = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
+APP_DATA_DIR = os.path.join(_XDG_DATA, "InterviewTool")
 os.makedirs(APP_DATA_DIR, exist_ok=True)
 LOG_FILE_PATH = os.path.join(APP_DATA_DIR, "app.log")
 CRASH_LOG_PATH = os.path.join(APP_DATA_DIR, "crash.log")
@@ -74,7 +76,8 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
         listener_socket.close()
         raise RuntimeError(
             "Desktop window support is missing. Install dependencies with "
-            "'pip install -r requirements.txt' and try again."
+            "'pip install -r requirements.txt' and try again.\n"
+            "On Linux also install: sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.0"
         ) from exc
 
     config = uvicorn.Config(
@@ -105,18 +108,7 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
     if not server.started:
         raise RuntimeError("The local web server stopped before it finished starting.")
 
-    app_title = os.getenv("APP_NAME", "Realtek HD Audio Universal Service").strip() or "Realtek HD Audio Universal Service"
-    try:
-        if sys.platform == "win32":
-            import ctypes
-            ctypes.windll.kernel32.SetConsoleTitleW(app_title)
-            # Auto-hide terminal window so only the GUI window is visible (0% terminal footprint)
-            if not os.getenv("DEBUG_CONSOLE"):
-                hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-                if hwnd:
-                    ctypes.windll.user32.ShowWindow(hwnd, 0)  # 0 = SW_HIDE
-    except Exception:
-        pass
+    app_title = os.getenv("APP_NAME", "AI Interview Copilot").strip() or "AI Interview Copilot"
 
     class DesktopApi:
         def __init__(self):
@@ -279,115 +271,15 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
 
     desktop_api = DesktopApi()
 
-    def _apply_stealth_flags(title: str):
-        import ctypes
-
-        WDA_EXCLUDEFROMCAPTURE = 0x00000011
-        GWL_EXSTYLE = -20
-        WS_EX_TOOLWINDOW = 0x00000080
-        WS_EX_APPWINDOW = 0x00040000
-
-        hwnd = None
-        try:
-            if hasattr(desktop_api._window, 'native') and desktop_api._window.native:
-                hwnd = int(desktop_api._window.native.Handle.ToInt64())
-        except Exception:
-            pass
-
-        if not hwnd:
-            # Fallback: Safely locate window handle by title
-            for _ in range(25):
-                hwnd = ctypes.windll.user32.FindWindowW(None, title)
-                if hwnd:
-                    break
-                time.sleep(0.2)
-
-        if not hwnd:
-            print("⚠️ Window HWND not found for stealth flags.")
-            return
-
-        desktop_api._hwnd = hwnd
-
-        # 0. Apply initial layered window transparency immediately on startup
-        desktop_api._apply_layered_alpha()
-
-        # 1. Screen-share Invisibility (Zoom, Teams, Meet, OBS, Snipping Tool, Discord)
-        try:
-            res = ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
-            if res:
-                print(f"🔒 [STEALTH ACTIVE] Window '{title}' is EXCLUDED from screen capture.")
-        except Exception as e:
-            print(f"Screen capture exclusion warning: {e}")
-
-        # 2. Hide native window border outline
-        try:
-            DWMWA_BORDER_COLOR = 34
-            DWMWA_COLOR_NONE = 0xFFFFFFFE
-            color_val = ctypes.c_uint32(DWMWA_COLOR_NONE)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ctypes.byref(color_val), ctypes.sizeof(color_val))
-        except Exception:
-            pass
-
-        # 3. Soft toolwindow style (exclude from Alt+Tab without blocking frame messages)
-        try:
-            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style & ~WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW)
-        except Exception:
-            pass
-
-        # 4. Register global hotkey Ctrl+M safely
-        threading.Thread(target=_register_global_hotkey, args=(desktop_api,), daemon=True).start()
-
-    def _register_global_hotkey(api):
-        """Register Ctrl+M as a global hotkey so the user can always toggle click-through,
-        even when WS_EX_TRANSPARENT is active and the window ignores mouse events."""
-        try:
-            import ctypes
-            from ctypes import wintypes
-
-            MOD_CONTROL = 0x0002
-            MOD_NOREPEAT = 0x4000
-            VK_M = 0x4D
-            HOTKEY_ID = 0x0001
-            WM_HOTKEY = 0x0312
-
-            user32 = ctypes.windll.user32
-            # Register Ctrl+M globally
-            if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_NOREPEAT, VK_M):
-                print("⚠️ Could not register Ctrl+M global hotkey (may be in use by another app).")
-                return
-
-            print("✅ Global hotkey Ctrl+M registered for click-through toggle.")
-
-            msg = wintypes.MSG()
-            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
-                if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
-                    is_active = api.toggle_click_through()
-                    # Sync frontend button state + show toast safely
-                    if api._window:
-                        try:
-                            js_state = 'true' if is_active else 'false'
-                            toast_msg = "Click-Through: ON — Press Ctrl+M to disable (auto-off in 30s)" if is_active else "Click-Through: Off (Normal clicks)"
-                            api._window.evaluate_js(
-                                f"document.querySelectorAll('.btn-click-through').forEach(b => b.classList.toggle('active', {js_state}));"
-                                f"showStealthToast('{toast_msg}');"
-                            )
-                        except Exception:
-                            pass
-
-            user32.UnregisterHotKey(None, HOTKEY_ID)
-        except Exception as e:
-            print(f"Global hotkey registration error: {e}")
-
     def on_gui_ready():
-        """Called safely once pywebview's native message loop has initialized and page is loaded."""
+        """Called safely once pywebview's native message loop has initialized."""
         try:
             if hasattr(desktop_api._window, 'events') and hasattr(desktop_api._window.events, 'loaded'):
                 desktop_api._window.events.loaded.wait(timeout=10)
             elif hasattr(desktop_api._window, 'events') and hasattr(desktop_api._window.events, 'shown'):
                 desktop_api._window.events.shown.wait(timeout=10)
             time.sleep(0.3)
-            _apply_stealth_flags(app_title)
+            print(f"✅ Desktop window ready: {app_title}")
         except Exception as e:
             print(f"Error in on_gui_ready: {e}")
 
@@ -407,7 +299,8 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
             js_api=desktop_api,
         )
         desktop_api._window = window
-        webview.start(on_gui_ready, gui="edgechromium")
+        # Linux: use GTK backend (requires python3-gi and webkit2gtk)
+        webview.start(on_gui_ready, gui="gtk")
     finally:
         server.should_exit = True
         server_thread.join(timeout=10)
@@ -416,30 +309,19 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
 
 
 def acquire_single_instance_lock(app_title: str):
-    """Ensure only one instance runs at a time.
-    If already running, bring existing window to front and exit gracefully."""
-    if sys.platform != "win32":
-        return None
+    """Ensure only one instance runs at a time (Linux: file-lock based)."""
+    import fcntl
+    _xdg = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
+    lock_dir = os.path.join(_xdg, "InterviewTool")
+    os.makedirs(lock_dir, exist_ok=True)
+    lock_path = os.path.join(lock_dir, "instance.lock")
     try:
-        import ctypes
-        MUTEX_NAME = "Local\\AI_Interview_Copilot_SingleInstance_Mutex"
-        ERROR_ALREADY_EXISTS = 183
-        mutex = ctypes.windll.kernel32.CreateMutexW(None, True, MUTEX_NAME)
-        if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
-            try:
-                hwnd = ctypes.windll.user32.FindWindowW(None, app_title)
-                if hwnd:
-                    SW_RESTORE = 9
-                    ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
-                    ctypes.windll.user32.SetForegroundWindow(hwnd)
-            except Exception:
-                pass
-            if mutex:
-                ctypes.windll.kernel32.CloseHandle(mutex)
-            sys.exit(0)
-        return mutex
-    except Exception:
-        return None
+        lock_file = open(lock_path, "w")
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return lock_file  # Keep file open to hold lock
+    except (IOError, OSError):
+        print(f"Another instance of {app_title} is already running.")
+        sys.exit(0)
 
 
 def main():
@@ -470,20 +352,8 @@ def main():
         StealthDesktopOverlay().run()
         return
 
-    app_title = os.getenv("APP_NAME", "Realtek HD Audio Universal Service").strip() or "Realtek HD Audio Universal Service"
-    instance_mutex = acquire_single_instance_lock(app_title)
-
-    try:
-        if sys.platform == "win32":
-            import ctypes
-            ctypes.windll.kernel32.SetConsoleTitleW(app_title)
-            # Auto-hide terminal window so only the GUI window is visible (0% terminal footprint)
-            if not os.getenv("DEBUG_CONSOLE"):
-                hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-                if hwnd:
-                    ctypes.windll.user32.ShowWindow(hwnd, 0)  # 0 = SW_HIDE
-    except Exception:
-        pass
+    app_title = os.getenv("APP_NAME", "AI Interview Copilot").strip() or "AI Interview Copilot"
+    instance_lock = acquire_single_instance_lock(app_title)
 
     host = os.getenv("HOST", "0.0.0.0")
     configured_port_value = os.getenv("PORT", "").strip()
@@ -494,7 +364,9 @@ def main():
     listener_socket = bind_server_socket(host, configured_port)
     port = listener_socket.getsockname()[1]
     os.environ["PORT"] = str(port)
-    app_data_dir = os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "InterviewTool")
+    # Linux: XDG_DATA_HOME instead of APPDATA
+    _xdg = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
+    app_data_dir = os.path.join(_xdg, "InterviewTool")
     os.makedirs(app_data_dir, exist_ok=True)
     with open(os.path.join(app_data_dir, "server_port.txt"), "w", encoding="ascii") as port_file:
         port_file.write(str(port))
@@ -515,10 +387,11 @@ def main():
         else:
             start_desktop_window(dashboard_url, host, port, listener_socket)
     finally:
-        if instance_mutex:
+        if instance_lock:
             try:
-                import ctypes
-                ctypes.windll.kernel32.CloseHandle(instance_mutex)
+                import fcntl
+                fcntl.flock(instance_lock, fcntl.LOCK_UN)
+                instance_lock.close()
             except Exception:
                 pass
         listener_socket.close()

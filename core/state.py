@@ -33,7 +33,9 @@ BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.absp
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 
-APP_DATA_DIR = os.getenv("INTERVIEW_TOOL_DATA_DIR") or os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "InterviewTool")
+# Linux: use XDG_DATA_HOME (~/.local/share) instead of Windows %APPDATA%
+_XDG_DATA = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
+APP_DATA_DIR = os.getenv("INTERVIEW_TOOL_DATA_DIR") or os.path.join(_XDG_DATA, "InterviewTool")
 APP_PREFERENCES_PATH = os.path.join(APP_DATA_DIR, "preferences.json")
 SESSION_HISTORY_PATH = os.path.join(APP_DATA_DIR, "session_history.json")
 RESUME_DATA_PATH = os.path.join(APP_DATA_DIR, "saved_resume.json")
@@ -66,26 +68,23 @@ _cached_user_uuid: Optional[str] = None
 CREDITS_HMAC_SECRET: str = os.getenv("CREDITS_HMAC_SECRET", "InterviewTool_HMAC_SecKey_2026")
 
 def get_machine_id() -> str:
-    """Retrieve permanent unique hardware identifier (Windows MachineGuid or node fallback)."""
+    """Retrieve permanent unique hardware identifier (Linux: /etc/machine-id or uuid node fallback)."""
     global _cached_machine_id
     if _cached_machine_id:
         return _cached_machine_id
-    try:
-        import winreg
-        key = winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Microsoft\Cryptography",
-            0,
-            winreg.KEY_READ | winreg.KEY_WOW64_64KEY
-        )
-        guid, _ = winreg.QueryValueEx(key, "MachineGuid")
-        winreg.CloseKey(key)
-        if guid and isinstance(guid, str) and len(guid.strip()) >= 8:
-            _cached_machine_id = guid.strip()
-            return _cached_machine_id
-    except Exception:
-        pass
 
+    # Linux: read /etc/machine-id (systemd) or /var/lib/dbus/machine-id
+    for mid_path in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
+        try:
+            with open(mid_path, "r") as f:
+                mid = f.read().strip()
+            if mid and len(mid) >= 8:
+                _cached_machine_id = mid
+                return _cached_machine_id
+        except (OSError, PermissionError):
+            continue
+
+    # Fallback: MAC-address-based UUID
     try:
         node = uuid.getnode()
         _cached_machine_id = str(uuid.UUID(int=node))

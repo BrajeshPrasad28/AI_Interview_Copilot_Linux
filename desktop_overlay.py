@@ -1,24 +1,31 @@
+"""
+Linux Desktop Overlay — Tkinter stealth overlay.
+
+Linux differences vs Windows:
+- SetWindowDisplayAffinity (screen-share exclusion) is Windows-only;
+  not available on Linux. The overlay is still visually transparent
+  but will NOT be excluded from OBS/screenshare on Linux.
+- WS_EX_TOOLWINDOW / WS_EX_NOACTIVATE are Windows-only; replaced
+  with Tkinter's skip_taskbar and type hints for similar UX.
+- WebSocket sync with Interview Copilot server is unchanged.
+"""
+
 import sys
-import ctypes
 import json
 import threading
 import tkinter as tk
-from tkinter import ttk
 import websocket
 
-# Windows API Constants
-WDA_EXCLUDEFROMCAPTURE = 0x00000011
-GWL_EXSTYLE = -20
-WS_EX_NOACTIVATE = 0x08000000
-WS_EX_TOOLWINDOW = 0x00000080
 
 class StealthDesktopOverlay:
     """
-    Native Windows stealth overlay:
-    - SetWindowDisplayAffinity: Invisible to Zoom, Teams, Google Meet, OBS screen-share!
-    - WS_EX_NOACTIVATE: Clicks do not steal focus from proctored windows!
-    - WS_EX_TOOLWINDOW: Hidden from Alt+Tab switcher!
+    Linux desktop overlay:
+    - Transparent, always-on-top Tkinter window.
+    - Excluded from taskbar (Linux WM hint).
     - WebSocket sync with Interview Copilot server.
+
+    Note: Screen-share capture exclusion (SetWindowDisplayAffinity) is a
+    Windows-only feature and cannot be replicated on Linux at the app level.
     """
 
     def __init__(self, ws_url=None):
@@ -27,7 +34,9 @@ class StealthDesktopOverlay:
         load_dotenv()
         port = os.getenv("PORT", "").strip()
         if not port:
-            app_data_dir = os.path.join(os.getenv("APPDATA", os.path.expanduser("~")), "InterviewTool")
+            # Linux XDG data dir instead of %APPDATA%
+            xdg_data = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
+            app_data_dir = os.path.join(xdg_data, "InterviewTool")
             try:
                 with open(os.path.join(app_data_dir, "server_port.txt"), "r", encoding="ascii") as port_file:
                     port = port_file.read().strip()
@@ -40,14 +49,15 @@ class StealthDesktopOverlay:
         self.root.title("Interview Stealth Overlay")
         self.root.geometry("450x600+100+100")
         self.root.attributes("-topmost", True)
-        self.alpha = 0.61  # 61% transparent charcoal glass opacity (matching reference app)
+        self.alpha = 0.61  # 61% transparent
         self.root.attributes("-alpha", self.alpha)
         self.root.configure(bg="#000000")
 
         # Make frameless
         self.root.overrideredirect(True)
 
-        self.apply_windows_stealth_flags()
+        # Linux: skip taskbar via WM type hint
+        self._apply_linux_window_hints()
         self.create_ui()
         self.bind_drag_events()
         self.bind_hotkeys()
@@ -56,28 +66,24 @@ class StealthDesktopOverlay:
         self.ws_thread = threading.Thread(target=self.start_websocket_listener, daemon=True)
         self.ws_thread.start()
 
-    def apply_windows_stealth_flags(self):
-        """Apply Windows OS stealth attributes."""
+    def _apply_linux_window_hints(self):
+        """Apply Linux-compatible window manager hints for overlay behaviour."""
         try:
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
-            if not hwnd:
-                hwnd = self.root.winfo_id()
-
-            # 1. Screen-share Invisibility
-            res = ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
-            if res:
-                print("🔒 [STEALTH ACTIVE] Window is EXCLUDED from screen capture (Zoom/Meet/Teams will not see this).")
-            else:
-                print("⚠️ SetWindowDisplayAffinity returned 0 (requires Windows 10 2004+).")
-
-            # 2. ExStyle: NoActivate & ToolWindow
-            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            style |= WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
-            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
-            print("🛡️ [FOCUS PROTECTION ACTIVE] Window will not steal focus when clicked.")
-
-        except Exception as e:
-            print(f"Could not apply native Windows stealth flags: {e}")
+            # Skip taskbar and pager (like WS_EX_TOOLWINDOW on Windows)
+            self.root.wm_attributes("-type", "dock")
+        except tk.TclError:
+            # Some WMs/display servers don't support -type; fall back gracefully
+            try:
+                self.root.wm_overrideredirect(True)
+            except Exception:
+                pass
+        try:
+            # Ensure it stays on top even under compositing WMs
+            self.root.wm_attributes("-topmost", True)
+        except Exception:
+            pass
+        print("ℹ️  [LINUX OVERLAY] Window is on top. "
+              "Note: screen-share capture exclusion is not available on Linux.")
 
     def create_ui(self):
         # Header / Titlebar for dragging
@@ -89,16 +95,18 @@ class StealthDesktopOverlay:
             text="● AI INTERVIEW COPILOT",
             bg="#0a0a0c",
             fg="#10b981",
-            font=("Segoe UI", 9, "bold")
+            font=("DejaVu Sans", 9, "bold")
         )
         self.title_label.pack(side="left", padx=10, pady=6)
 
         # Controls in header
-        self.btn_min = tk.Label(self.header, text=" — ", bg="#0a0a0c", fg="#94a3b8", cursor="hand2", font=("Segoe UI", 9, "bold"))
+        self.btn_min = tk.Label(self.header, text=" — ", bg="#0a0a0c", fg="#94a3b8", cursor="hand2",
+                                font=("DejaVu Sans", 9, "bold"))
         self.btn_min.pack(side="right", padx=6)
         self.btn_min.bind("<Button-1>", lambda e: self.toggle_minimize())
 
-        self.btn_close = tk.Label(self.header, text=" ✕ ", bg="#0a0a0c", fg="#ef4444", cursor="hand2", font=("Segoe UI", 9, "bold"))
+        self.btn_close = tk.Label(self.header, text=" ✕ ", bg="#0a0a0c", fg="#ef4444", cursor="hand2",
+                                  font=("DejaVu Sans", 9, "bold"))
         self.btn_close.pack(side="right", padx=6)
         self.btn_close.bind("<Button-1>", lambda e: self.root.destroy())
 
@@ -111,7 +119,7 @@ class StealthDesktopOverlay:
             bg="#0d0d12",
             fg="#f8fafc",
             insertbackground="#10b981",
-            font=("Segoe UI", 10),
+            font=("DejaVu Sans Mono", 10),
             wrap="word",
             bd=0,
             padx=12,
@@ -119,10 +127,10 @@ class StealthDesktopOverlay:
         )
         self.text_display.pack(fill="both", expand=True)
 
-        self.text_display.tag_configure("bold", font=("Segoe UI", 10, "bold"), foreground="#38bdf8")
-        self.text_display.tag_configure("code", font=("Consolas", 9), background="#050811", foreground="#a5f3fc")
-        self.text_display.tag_configure("green", foreground="#10b981", font=("Segoe UI", 10, "bold"))
-        self.text_display.tag_configure("muted", foreground="#64748b", font=("Segoe UI", 9, "italic"))
+        self.text_display.tag_configure("bold",   font=("DejaVu Sans", 10, "bold"), foreground="#38bdf8")
+        self.text_display.tag_configure("code",   font=("DejaVu Sans Mono", 9),    background="#050811", foreground="#a5f3fc")
+        self.text_display.tag_configure("green",  foreground="#10b981",             font=("DejaVu Sans", 10, "bold"))
+        self.text_display.tag_configure("muted",  foreground="#64748b",             font=("DejaVu Sans", 9, "italic"))
 
         self.text_display.insert("end", "Waiting for question or screen snip (Ctrl+Shift+S)...\n", "muted")
         self.text_display.config(state="disabled")
@@ -136,13 +144,13 @@ class StealthDesktopOverlay:
             text="Ctrl+Shift+S: Snip | Ctrl+Shift+C: Clear | Ctrl+[/]: Opacity",
             bg="#0a0a0c",
             fg="#64748b",
-            font=("Segoe UI", 8)
+            font=("DejaVu Sans", 8)
         )
         self.status_label.pack(side="left", padx=10, pady=3)
 
     def bind_hotkeys(self):
-        """Bind in-window opacity and stealth hotkeys."""
-        self.root.bind("<Control-bracketleft>", lambda e: self.adjust_alpha(-0.08))
+        """Bind in-window opacity hotkeys."""
+        self.root.bind("<Control-bracketleft>",  lambda e: self.adjust_alpha(-0.08))
         self.root.bind("<Control-bracketright>", lambda e: self.adjust_alpha(0.08))
 
     def adjust_alpha(self, delta):
@@ -216,7 +224,7 @@ class StealthDesktopOverlay:
         self.root.after(0, _update)
 
     def clear_text(self):
-        """Clear all content when panic clear or clear is pressed."""
+        """Clear all content when panic clear is pressed."""
         def _update():
             self.text_display.config(state="normal")
             self.text_display.delete("1.0", "end")
@@ -268,6 +276,7 @@ class StealthDesktopOverlay:
 
     def run(self):
         self.root.mainloop()
+
 
 if __name__ == "__main__":
     overlay = StealthDesktopOverlay()

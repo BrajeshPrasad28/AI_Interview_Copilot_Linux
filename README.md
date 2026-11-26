@@ -1,209 +1,162 @@
-# 🚀  Realtek HD Audio Universal Service ("Interview Cracked")
+# 🚀 AI Interview Copilot — Linux Edition
 
-A covert, ultra-fast, dual-device AI interview assistant engineered for live technical interviews, coding challenges (LeetCode / HackerRank), and proctored hiring assessments (Accenture, Mercer Mettl, HireVue, Talview).
+A covert, ultra-fast, dual-device AI interview assistant engineered for live technical interviews, coding challenges (LeetCode / HackerRank), and proctored hiring assessments.
 
-Powered by a **Dual-Engine AI architecture (Groq + Gemini 2.5 Flash)** with **WASAPI loopback interviewer audio isolation**, **real-time screen vision OCR**, and **stealth desktop overlay**.
+Powered by a **Dual-Engine AI architecture (Groq + Gemini 2.5 Flash)** with **PulseAudio/PipeWire system audio loopback**, **real-time screen vision OCR**, and **stealth desktop overlay**.
+
+> **This is the Linux port** of [AI_Interview_Copilot](https://github.com/BrajeshPrasad28/AI_Interview_Copilot) (originally Windows-only).
 
 ---
 
 ## 🌟 Key Highlights
 
-- ⚡ **Sub-Second Answers (< 1s Response):** Uses Groq's high-throughput LPU models (`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`) for instant answers, with automatic silent failover to Google Gemini 2.5 Flash.
-- 🎧 **Interviewer Voice Only Mode (0% Mic Bleed):** Captures audio directly from your headphones/speakers using Windows WASAPI Loopback. Your microphone is completely muted by default, so your voice is never captured or mistaken for a question.
-- 🧠 **Silero VAD (Neural Voice Activity Detection):** Powered by an ONNX runtime engine (`models/silero_vad.onnx`, ~1.8MB) with 0% PyTorch bloat. Automatically detects when the interviewer finishes speaking with intelligent silence debouncing and RMS energy fallback.
-- 📄 **Direct Resume Upload (.pdf / .docx / .txt):** Candidate can upload their actual resume from the PC dashboard or mobile phone. Extracted text is injected directly into the AI context for authentic STAR-method and background answers.
-- 🔄 **5-Turn Auto-Truncating Rolling Memory:** Automatically maintains conversational context for follow-up questions while pruning older turns after 5 turns to guarantee API latency stays strictly under 1 second.
-- 🏷️ **Speaker Diarization:** Real-time visual tagging across overlays and phone companion (`🎧 Interviewer` vs `📱 Candidate` vs `📸 Screen Vision`).
-- 🎙️ **Groq Whisper Transcription:** High-accuracy, ~200ms speech-to-text with intelligent silence debouncing and question filtering.
-- 📸 **Screen Snip & Vision Solver (`Ctrl + Shift + S`):** Instant OCR and coding solution extraction for LeetCode, HackerRank, or system design diagrams.
-- 🪟 **Stealth Transparent Overlay:** Excluded from Zoom, Microsoft Teams, and Google Meet screen shares using native Windows `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` and `WS_EX_TOOLWINDOW` (hidden from Alt+Tab).
-- 🎭 **Process Name (`Realtek HD Audio Universal Service`):** Executable and builds the standalone Interview Practice Copilot executable.
-- 📱 **Dual-Device Mobile Companion:** For proctored tests that lock the screen, solutions stream silently to your smartphone placed beneath your webcam.
-- 🔒 **Local Network Pairing Security:** All endpoints and WebSockets are locked with cryptographically secure 16-byte pairing tokens.
+- ⚡ **Sub-Second Answers (< 1s Response):** Uses Groq's high-throughput LPU models for instant answers, with automatic failover to Google Gemini 2.5 Flash.
+- 🎧 **System Audio Loopback (0% Mic Bleed):** Captures audio from your speakers/headphones using **PulseAudio / PipeWire monitor source** (Linux equivalent of Windows WASAPI loopback). Your microphone is never captured.
+- 🧠 **Silero VAD (Neural Voice Activity Detection):** ONNX runtime engine with 0% PyTorch bloat. Detects when the interviewer finishes speaking.
+- 📄 **Direct Resume Upload (.pdf / .docx / .txt):** Resume text injected into AI context for STAR-method answers.
+- 🔄 **5-Turn Auto-Truncating Rolling Memory:** Keeps conversational context while pruning older turns for sub-1s latency.
+- 🎙️ **Groq Whisper Transcription:** ~200ms speech-to-text with intelligent silence debouncing.
+- 📸 **Screen Snip & Vision Solver (`Ctrl + Shift + S`):** OCR and coding solution for LeetCode, HackerRank, or system design diagrams.
+- 🪟 **Desktop Overlay:** Transparent always-on-top Tkinter overlay (note: screen-share capture exclusion is Windows-only and not available on Linux).
+- 📱 **Dual-Device Mobile Companion:** Solutions stream silently to your smartphone.
+- 🔒 **Local Network Pairing Security:** All endpoints locked with cryptographically secure 16-byte pairing tokens.
 
 ---
 
-## 🏗️ How It Works (Architecture)
+## 🏗️ Linux vs Windows Differences
 
-```
-                    +------------------------------------+
-                    |        INTERVIEW SYSTEM AUDIO      |
-                    |   (Interviewer Voice via Headset)  |
-                    +-----------------+------------------+
-                                      | (WASAPI Loopback Capture)
-                                      v
-+-------------------------------------+----------------------------------+
-|                        Realtek HD Audio Universal Service HUB                         |
-|                                                                        |
-|  [Groq Whisper / Audio Engine]                                         |
-|      Transcribes interviewer question in ~200ms                        |
-|                                                                        |
-|  [Dual-Engine AI Reasoning]                                            |
-|      Primary: Groq (0.5s - 1.2s instant natural spoken answer)         |
-|      Auto-Failover: Gemini 2.5 Flash (Rate-limit & quota protection)   |
-|                                                                        |
-|  [Screen Vision Engine]                                                |
-|      Ctrl+Shift+S captures & solves LeetCode/Code screens via Gemini   |
-+---------------------+----------------------------------+---------------+
-                      |                                  |
-                      | WebSocket (Secure Token)         | WebSocket
-                      v                                  v
-       +-------------------------------+   +-----------------------------+
-       |   TRANSPARENT DESKTOP OVERLAY |   |   MOBILE COMPANION (Phone)  |
-       |                               |   |                             |
-       | - Screen-share invisible      |   | - Upright below webcam      |
-       | - Translucent glass design    |   | - 0% PC screen footprint    |
-       | - Descending answer history   |   | - 1-tap Blackout mode (🕶️)  |
-       | - Ultra-thin scrollbar        |   | - Font scaling (A- / A+)    |
-       +-------------------------------+   +-----------------------------+
-```
+| Feature | Windows | Linux |
+|---|---|---|
+| Audio Loopback | WASAPI (PyAudioWPatch) | PulseAudio/PipeWire monitor source (pyaudio) |
+| Screen Capture Exclusion | `SetWindowDisplayAffinity` ✅ | Not available on Linux ❌ |
+| App Data Dir | `%APPDATA%\InterviewTool` | `~/.local/share/InterviewTool` |
+| Machine ID | Windows Registry MachineGuid | `/etc/machine-id` |
+| Desktop Shortcut | `.lnk` file | XDG `.desktop` file |
+| Launcher | `.bat` files | `.sh` shell scripts |
+| WebView Backend | EdgeChromium | GTK + WebKit2 |
+| Instance Lock | Windows Mutex | `fcntl` file lock |
 
 ---
 
 ## ⚡ Quickstart Guide
 
 ### 1. Configure Your API Keys
-Create a `.env` file in the project root (or copy from `.env.example`):
-
-```env
-# Google Gemini API Key (Free from https://aistudio.google.com/)
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Groq API Key (Free ultra-fast key from https://console.groq.com/)
-GROQ_API_KEY=your_groq_api_key_here
-
-# Default Topic Mode (general | coding | system_design | behavioral)
-DEFAULT_MODE=general
-DEFAULT_CODING_LANG=python
-# Optional: set PORT to request a fixed port; otherwise the OS selects an available port silently.
+```bash
+cp .env.example .env
+# Edit .env and add your keys:
+#   GEMINI_API_KEY=your_gemini_api_key_here
+#   GROQ_API_KEY=your_groq_api_key_here
 ```
 
-> [!TIP]
-> Both Groq and Gemini keys can also be added or updated live in the Web UI **Settings (⚙️)** modal.
+### 2. Install System Dependencies (Ubuntu/Debian)
+```bash
+sudo apt install -y \
+    portaudio19-dev \
+    python3-gi python3-gi-cairo \
+    gir1.2-gtk-3.0 gir1.2-webkit2-4.0 \
+    libgirepository1.0-dev
+```
+
+**Fedora:**
+```bash
+sudo dnf install -y portaudio-devel gobject-introspection-devel webkit2gtk3-devel
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -Sy portaudio python-gobject webkit2gtk
+```
+
+### 3. Run Automated Setup
+```bash
+bash setup.sh
+```
+This will create a virtualenv, install Python dependencies, and create a desktop shortcut.
+
+### 4. Launch the App
+```bash
+# Desktop GUI window (default)
+bash run.sh
+
+# Browser mode (open in your default browser)
+bash run.sh --browser
+
+# Debug mode (keep terminal visible)
+bash run.sh --debug
+```
 
 ---
 
-### 2. Launch the Software
-You can start the tool in any of these ways:
+## 🔊 PulseAudio Loopback Setup
 
-- **Desktop Shortcut:** Double-click the **`Realtek HD Audio Universal Service`** icon on your Desktop. The dashboard opens in an app window, not a separate browser.
-- **Batch Launcher:** Double-click `run.bat` to open the desktop app window.
-- **Command Line:**
-  ```powershell
-  .\.venv\Scripts\python run.py
-  ```
+The app automatically finds your default sink's monitor source. To verify it works:
+```bash
+# List all audio sources — look for lines containing "monitor"
+pactl list short sources | grep monitor
 
-To use the desktop dashboard in your default browser instead, run:
-
-```powershell
-.\.venv\Scripts\python run.py --browser
+# Example output:
+# 1  alsa_output.pci-0000_00_1f.3.analog-stereo.monitor  ...
 ```
 
-The desktop app uses an embedded WebView window for the PC dashboard. Its local server runs in the background while the window is open and shuts down when you close the app. To pair a phone, scan the QR code from the dashboard or use **Copy Phone Link** and open that link on the phone; there is no need to open the mobile page on the laptop. **Open Desktop Overlay** starts the separate native Windows overlay window.
-
-The packaged desktop app requires the Microsoft Edge WebView2 Runtime, which is normally already installed on modern Windows systems.
-
----
-
-## 💻 Installing on Your Laptop or a Friend's Laptop
-
-### 🎯 1-Click Desktop Icon Setup
-To create or restore the **`Realtek HD Audio Universal Service`** desktop shortcut with the custom cyber AI headset icon:
-- Simply double-click **`Create_Desktop_Icon.bat`**.
-
-### 🤝 Automated Setup for a Friend's PC
-To install the tool on a friend's laptop without manual setup:
-1. Share the project folder (or zip) with your friend.
-2. On their laptop, double-click **`setup_friend_pc.bat`**.
-3. The wizard will:
-   - Detect or install Python automatically via Windows `winget`.
-   - Create the isolated virtual environment and install dependencies.
-   - Install the embedded desktop window dependency.
-   - Create the **Desktop Shortcut** with the custom icon on their Desktop.
-
-### 📦 Compiling into a Standalone Executable (`.exe`)
-To package the app into a standalone Windows software that requires **no Python** installed:
-1. Double-click **`build_exe.bat`**.
-2. PyInstaller will compile all files, audio engines, and templates into:
-   ```text
-   dist\Realtek HD Audio Universal Service\Realtek HD Audio Universal Service.exe
-   ```
-3. You can zip that folder and run it directly on any Windows PC!
+If audio capture doesn't work:
+1. Make sure PulseAudio or PipeWire-pulse is running: `systemctl --user status pipewire-pulse`
+2. Play audio from any app — the monitor source only captures when audio is actively playing.
 
 ---
 
 ## ⌨️ Global Hotkeys (Active Anytime)
 
-| Hotkey | Action | Description |
-|---|---|---|
-| **Ctrl + Shift + S** | **Snip Screen & Solve** | Instantly captures primary screen, reads coding problem/diagram, and streams optimal solution. |
-| **Ctrl + Shift + C** | **Panic Clear** | Instantly wipes all displayed text and answers from all screens. |
+| Hotkey | Action |
+|---|---|
+| **Ctrl + Shift + S** | Snip screen & solve coding problem |
+| **Ctrl + Shift + C** | Panic clear — wipe all displayed text |
 
 ---
 
 ## 🎯 Specialized Modes
 
-1. **General Tech (Default):** Natural, conversational developer responses. Formatted as a spoken summary followed by key technical highlights (bullet points only where relevant).
-2. **DSA & Coding:** Full algorithm breakdown, optimal time & space complexity ($O(N)$, $O(1)$), clean idiomatic code, and edge case coverage.
-3. **System Design:** Architecture overview, component breakdown, database choice, scaling & caching strategies, and trade-offs.
-4. **HR / Behavioral:** Grounded in the **STAR method** (Situation, Task, Action, Result). Integrates with your uploaded resume so answers reflect your real work experience.
+1. **General Tech:** Natural developer responses.
+2. **DSA & Coding:** Algorithm breakdown, complexity, clean code.
+3. **System Design:** Architecture, components, scaling, trade-offs.
+4. **HR / Behavioral:** STAR method, integrates with uploaded resume.
 
 ---
-
-## Session Q&A History
-
-The dashboard sidebar's **History** view stores the five most recent interview sessions in `%APPDATA%\InterviewTool\session_history.json`. Each session includes its profile name, date and time, and the full list of successful question-and-answer pairs. Expand a session to review its Q&A or delete that session. Starting a new session after ending the current interview adds it to the top; older sessions beyond the five-session limit are removed automatically. This saved history is separate from the AI's rolling five-turn context.
 
 ## 📁 Project Structure
 
 ```text
-Interview Tool/
-├── app_icon.ico               # Custom multi-resolution AI Copilot Windows icon
+AI Interview Copilot (Linux)/
 ├── run.py                     # Main application runner & port manager
-├── run.bat                    # Double-click console launcher
-├── Create_Desktop_Icon.bat    # 1-click script to place icon on Windows Desktop
-├── setup_friend_pc.bat        # Automated setup wizard for friend's PC
-├── build_exe.bat              # PyInstaller standalone executable builder (Realtek HD Audio Universal Service disguise)
-├── stop_copilot.bat           # 1-click script to stop background processes
+├── run.sh                     # 🐧 Linux launch script
+├── setup.sh                   # 🐧 Linux automated setup wizard
+├── stop_copilot.sh            # 🐧 Linux stop script
+├── create_shortcut.py         # 🐧 Linux XDG .desktop shortcut creator
 ├── server.py                  # FastAPI server, security tokens & WebSocket hub
 ├── session_history.py         # Persistent five-session Q&A history
-├── ai_engine.py               # Groq + Gemini dual-engine AI reasoning, Whisper STT & 5-turn memory
-├── loopback_audio.py          # Windows WASAPI loopback audio listener + Silero VAD ONNX
-├── document_processor.py      # PDF, DOCX, DOC, TXT Resume text extraction (pypdf/docx)
+├── ai_engine.py               # Groq + Gemini dual-engine AI, Whisper STT
+├── loopback_audio.py          # 🐧 PulseAudio/PipeWire monitor source loopback
+├── document_processor.py      # PDF, DOCX, TXT resume text extraction
 ├── screen_snipper.py          # Screen capture engine (MSS / PIL)
-├── hotkeys.py                 # Windows global keyboard hook manager (pynput)
-├── desktop_overlay.py         # Native Tkinter stealth overlay (WDA_EXCLUDEFROMCAPTURE + ToolWindow)
+├── hotkeys.py                 # Global keyboard hook (pynput)
+├── desktop_overlay.py         # 🐧 Transparent Tkinter overlay (Linux GTK hints)
 ├── models/
-│   └── silero_vad.onnx        # ONNX neural voice activity detector (1.8MB, 0% PyTorch bloat)
+│   └── silero_vad.onnx        # ONNX neural voice activity detector (1.8MB)
 ├── templates/
-│   ├── index.html             # Host PC dashboard with pairing QR code & resume upload
-│   ├── overlay.html           # Transparent web overlay with descending answer feed
+│   ├── index.html             # Host PC dashboard
+│   ├── overlay.html           # Transparent web overlay
 │   └── mobile.html            # Mobile companion web app
-├── static/
-│   ├── css/mobile.css         # Mobile styling and dark mode
-│   └── js/mobile.js           # Companion WebSockets, audio meter & speech logic
-├── requirements.txt           # Python dependency manifest
+├── static/                    # CSS & JS assets
+├── requirements.txt           # 🐧 Linux Python dependencies
 ├── .env.example               # Environment variables template
-└── README.md                  # Complete documentation
+└── README.md                  # This file
 ```
-
-### HTML Templates
-
-The dashboard and desktop overlay render AI questions, model names, and error messages in the browser. These values are HTML-escaped before insertion so text returned by services is displayed as text instead of interpreted as markup. This uses built-in browser JavaScript and does not add a Python dependency.
 
 ---
 
-## 🛡️ Proctored Exam & Screen-Share Best Practices
+## 📄 Session History
 
-1. **For Zoom / Google Meet / Teams Interviews:**
-   - Click **Open Desktop Overlay** in the dashboard to launch the native Windows overlay.
-   - It uses Windows `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` to request exclusion from screen capture.
-2. **For Proctored Assessments (Mercer Mettl, HireVue, Safe Exam Browser, Talview):**
-   - **Do NOT open any overlay or extra windows on your PC.**
-   - Open the **Mobile Companion (`/mobile`)** on your smartphone.
-   - Prop your phone vertically directly below your laptop webcam.
-   - Your PC remains 100% compliant with full-screen lock and window focus detection.
-   - Use `Ctrl+Shift+S` to silently snip and solve coding questions directly to your phone.
+Session history is stored in `~/.local/share/InterviewTool/session_history.json`.
+The dashboard sidebar's **History** view stores the five most recent interview sessions.
 
 ---
 
