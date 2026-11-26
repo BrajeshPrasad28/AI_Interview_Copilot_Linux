@@ -4,9 +4,80 @@ Creates a standard XDG .desktop file for AI Interview Copilot.
 Run this once to add it to your application launcher / taskbar.
 """
 
+import ast
 import os
-import sys
+import shlex
+import shutil
 import stat
+import subprocess
+import sys
+
+
+_MEDIA_KEYS_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys"
+_CUSTOM_BINDING_BASE = (
+    "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/"
+)
+_CUSTOM_BINDING_NAME = "AI Interview Copilot Window Toggle"
+
+
+def _gsettings(*arguments):
+    return subprocess.run(
+        ["gsettings", *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+
+def install_gnome_toggle_shortcut(python_executable, run_py):
+    desktop = os.getenv("XDG_CURRENT_DESKTOP", "").lower()
+    if os.getenv("XDG_SESSION_TYPE") != "wayland" or "gnome" not in desktop:
+        return False
+    if not shutil.which("gsettings"):
+        raise RuntimeError("gsettings is required to configure a GNOME shortcut.")
+
+    raw_paths = _gsettings("get", _MEDIA_KEYS_SCHEMA, "custom-keybindings").stdout.strip()
+    if raw_paths.startswith("@as "):
+        raw_paths = raw_paths[4:]
+    paths = ast.literal_eval(raw_paths)
+    if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
+        raise RuntimeError("GNOME returned an invalid custom-keybindings list.")
+
+    bindings = (
+        ("ai-interview-copilot", _CUSTOM_BINDING_NAME, "--toggle-window", "<Control><Shift>m"),
+        (
+            "ai-interview-copilot-disable-pass-through",
+            "AI Interview Copilot Disable Click-Through",
+            "--disable-click-through",
+            "<Control><Alt>m",
+        ),
+    )
+    paths_changed = False
+    for slug, name, argument, binding in bindings:
+        candidate = _CUSTOM_BINDING_BASE + f"{slug}/"
+        suffix = 2
+        while candidate in paths:
+            schema = f"{_MEDIA_KEYS_SCHEMA}.custom-keybinding:{candidate}"
+            existing_name = ast.literal_eval(_gsettings("get", schema, "name").stdout.strip())
+            existing_command = ast.literal_eval(_gsettings("get", schema, "command").stdout.strip())
+            if existing_name == name and run_py in existing_command and argument in existing_command:
+                break
+            candidate = _CUSTOM_BINDING_BASE + f"{slug}-{suffix}/"
+            suffix += 1
+
+        command = f"{shlex.quote(python_executable)} {shlex.quote(run_py)} {argument}"
+        custom_schema = f"{_MEDIA_KEYS_SCHEMA}.custom-keybinding:{candidate}"
+        _gsettings("set", custom_schema, "name", name)
+        _gsettings("set", custom_schema, "command", command)
+        _gsettings("set", custom_schema, "binding", binding)
+        if candidate not in paths:
+            paths.append(candidate)
+            paths_changed = True
+
+    if paths_changed:
+        _gsettings("set", _MEDIA_KEYS_SCHEMA, "custom-keybindings", repr(paths))
+    return True
 
 
 def create_desktop_shortcut():
@@ -56,6 +127,12 @@ StartupWMClass=AI Interview Copilot
             print(f"SUCCESS: Desktop shortcut created at:\n{desktop_path}")
 
         print(f"SUCCESS: Application launcher entry created at:\n{app_entry_path}")
+
+        try:
+            if install_gnome_toggle_shortcut(venv_python, run_py):
+                print("SUCCESS: GNOME Wayland window toggle registered (Ctrl+Shift+M).")
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
+            print(f"WARNING: Could not register the GNOME window toggle: {error}")
 
         # Update desktop database so the launcher picks it up
         try:

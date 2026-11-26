@@ -27,6 +27,23 @@
         let currentVadMode = 'smart';
         let pendingPreferences = {};
         let preferencesSaveTimer = null;
+        const transientMessageTimers = new WeakMap();
+
+        function setTransientMessage(element, message, { autoDismiss = true, onDismiss = null } = {}) {
+            if (!element) return;
+            clearTimeout(transientMessageTimers.get(element));
+            element.textContent = message;
+            if (!message || !autoDismiss) {
+                transientMessageTimers.delete(element);
+                return;
+            }
+            transientMessageTimers.set(element, setTimeout(() => {
+                if (element.textContent !== message) return;
+                element.textContent = '';
+                transientMessageTimers.delete(element);
+                if (onDismiss) onDismiss();
+            }, 5000));
+        }
 
         function formatTo12HourTime(ts) {
             if (!ts) return '';
@@ -112,11 +129,13 @@
             }
             if (errEl) {
                 if (isValid || !errorMsg) {
+                    setTransientMessage(errEl, '', { autoDismiss: false });
                     errEl.style.display = 'none';
-                    errEl.textContent = '';
                 } else {
                     errEl.style.display = 'flex';
-                    errEl.textContent = errorMsg;
+                    setTransientMessage(errEl, errorMsg, {
+                        onDismiss: () => { errEl.style.display = 'none'; }
+                    });
                 }
             }
             if (inputEl) {
@@ -138,11 +157,13 @@
             }
             if (errEl) {
                 if (hasResume) {
+                    setTransientMessage(errEl, '', { autoDismiss: false });
                     errEl.style.display = 'none';
-                    errEl.textContent = '';
                 } else {
                     errEl.style.display = 'flex';
-                    errEl.textContent = 'Resume upload is mandatory. Please upload your PDF resume.';
+                    setTransientMessage(errEl, 'Resume upload is mandatory. Please upload your PDF resume.', {
+                        onDismiss: () => { errEl.style.display = 'none'; }
+                    });
                 }
             }
         }
@@ -275,7 +296,7 @@
             pendingPreferences[key] = value;
             applyPreference(key, value);
             const status = document.getElementById('profile-settings-status');
-            if (status) status.textContent = 'Saving settings…';
+            setTransientMessage(status, 'Saving settings…', { autoDismiss: false });
             clearTimeout(preferencesSaveTimer);
             preferencesSaveTimer = setTimeout(async () => {
                 const changes = pendingPreferences;
@@ -292,12 +313,12 @@
                         currentVadMode = changes.vad_mode;
                         updateLoopbackUI(result.loopback_active);
                     }
-                    if (status) status.textContent = 'Settings saved automatically.';
+                    setTransientMessage(status, 'Settings saved automatically.');
                 } catch (error) {
                     if (Object.prototype.hasOwnProperty.call(changes, 'google_search_enabled')) {
                         applyPreference('google_search_enabled', false);
                     }
-                    if (status) status.textContent = error.message;
+                    setTransientMessage(status, error.message);
                 }
             }, 400);
         }
@@ -437,7 +458,7 @@
                 if (!response.ok) throw new Error(data.detail || 'Could not delete session history.');
                 await loadSessionHistory();
             } catch (error) {
-                alert(error.message);
+                showStealthToast(error.message);
             }
         }
 
@@ -699,7 +720,7 @@
             document.getElementById('note-editor-content').value = '';
             document.getElementById('btn-save-note').textContent = 'Save Note';
             document.getElementById('btn-cancel-note').style.display = 'none';
-            document.getElementById('note-editor-status').textContent = '';
+            setTransientMessage(document.getElementById('note-editor-status'), '', { autoDismiss: false });
             const charCountEl = document.getElementById('note-editor-char-counter');
             if (charCountEl) {
                 charCountEl.textContent = '0/500 characters';
@@ -716,7 +737,7 @@
             document.getElementById('note-editor-content').value = note.content;
             document.getElementById('btn-save-note').textContent = 'Update Note';
             document.getElementById('btn-cancel-note').style.display = 'inline-block';
-            document.getElementById('note-editor-status').textContent = `Editing: ${note.title}`;
+            setTransientMessage(document.getElementById('note-editor-status'), `Editing: ${note.title}`);
             const charCountEl = document.getElementById('note-editor-char-counter');
             if (charCountEl) {
                 const len = (note.content || '').length;
@@ -737,24 +758,24 @@
             const status = document.getElementById('note-editor-status');
 
             if (title.length > 50) {
-                status.textContent = 'Note title exceeds the 50 characters limit.';
+                setTransientMessage(status, 'Note title exceeds the 50 characters limit.');
                 status.style.color = '#ef4444';
                 return;
             }
 
             if (content.length > 500) {
-                status.textContent = 'Note content exceeds the 500 characters limit.';
+                setTransientMessage(status, 'Note content exceeds the 500 characters limit.');
                 status.style.color = '#ef4444';
                 return;
             }
 
             if (!title && !content) {
-                status.textContent = 'Please enter a title or note content.';
+                setTransientMessage(status, 'Please enter a title or note content.');
                 status.style.color = '#ef4444';
                 return;
             }
 
-            status.textContent = 'Saving note...';
+            setTransientMessage(status, 'Saving note...', { autoDismiss: false });
             status.style.color = '#94a3b8';
 
             try {
@@ -765,19 +786,18 @@
                 });
                 const data = await res.json();
                 if (res.ok && data.success) {
-                    status.textContent = 'Note saved successfully!';
-                    status.style.color = '#10b981';
                     cachedNotes = data.notes;
                     renderDashboardNotesList(cachedNotes);
                     renderCopilotNotes(cachedNotes);
                     resetNoteEditor();
-                    setTimeout(() => { status.textContent = ''; }, 2500);
+                    setTransientMessage(status, 'Note saved successfully!');
+                    status.style.color = '#10b981';
                 } else {
-                    status.textContent = `Error: ${data.detail || 'Could not save note'}`;
+                    setTransientMessage(status, `Error: ${data.detail || 'Could not save note'}`);
                     status.style.color = '#ef4444';
                 }
             } catch (err) {
-                status.textContent = `Error: ${err.message}`;
+                setTransientMessage(status, `Error: ${err.message}`);
                 status.style.color = '#ef4444';
             }
         }
@@ -893,6 +913,29 @@
             if (raw.length > 16) raw = raw.slice(0, 16);
             const parts = raw.match(/.{1,4}/g);
             input.value = parts ? parts.join('-') : raw;
+        }
+
+        const creditStatusTimers = new WeakMap();
+        function setCreditStatus(status, message, type) {
+            if (!status) return;
+            const previousTimer = creditStatusTimers.get(status);
+            if (previousTimer) clearTimeout(previousTimer);
+
+            if (!message) {
+                status.style.display = 'none';
+                status.textContent = '';
+                creditStatusTimers.delete(status);
+                return;
+            }
+
+            status.style.display = 'block';
+            status.className = `credit-redeem-status ${type}`;
+            status.textContent = message;
+            creditStatusTimers.set(status, setTimeout(() => {
+                status.style.display = 'none';
+                status.textContent = '';
+                creditStatusTimers.delete(status);
+            }, 5000));
         }
 
         function fillVoucherCode(code) {
@@ -1118,11 +1161,7 @@
 
             const raw = input.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
             if (raw.length !== 16) {
-                if (status) {
-                    status.style.display = 'block';
-                    status.className = 'credit-redeem-status error';
-                    status.textContent = 'Please enter a valid 16-character alphanumeric voucher code (e.g. ABCD-1234-EFGH-5678).';
-                }
+                setCreditStatus(status, 'Please enter a valid 16-character alphanumeric voucher code (e.g. ABCD-1234-EFGH-5678).', 'error');
                 input.focus();
                 return;
             }
@@ -1130,10 +1169,7 @@
             btn.disabled = true;
             const oldText = btn.textContent;
             btn.textContent = 'Verifying...';
-            if (status) {
-                status.style.display = 'none';
-                status.textContent = '';
-            }
+            setCreditStatus(status, '', '');
 
             try {
                 const response = await fetch('/api/credits/redeem', {
@@ -1149,22 +1185,14 @@
                     throw new Error(data.detail || data.error || 'Failed to redeem voucher code.');
                 }
 
-                if (status) {
-                    status.style.display = 'block';
-                    status.className = 'credit-redeem-status success';
-                    status.textContent = `${data.message || 'Voucher redeemed successfully!'} (Added +${data.amount} Credits)`;
-                }
+                setCreditStatus(status, `${data.message || 'Voucher redeemed successfully!'} (Added +${data.amount} Credits)`, 'success');
 
                 input.value = '';
 
                 // Reload fresh credits and transactions
                 await loadCreditsData();
             } catch (err) {
-                if (status) {
-                    status.style.display = 'block';
-                    status.className = 'credit-redeem-status error';
-                    status.textContent = err.message;
-                }
+                setCreditStatus(status, err.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.textContent = oldText;
@@ -1216,18 +1244,14 @@
             if (!input || !btn) return;
             const code = input.value.trim().toUpperCase();
             if (!code) {
-                if (status) {
-                    status.style.display = 'block';
-                    status.className = 'credit-redeem-status error';
-                    status.textContent = 'Please enter a referral code.';
-                }
+                setCreditStatus(status, 'Please enter a referral code.', 'error');
                 return;
             }
 
             const oldText = btn.textContent;
             btn.disabled = true;
             btn.textContent = 'Applying...';
-            if (status) status.style.display = 'none';
+            setCreditStatus(status, '', '');
 
             try {
                 const resp = await fetch('/api/credits/referral/redeem', {
@@ -1243,20 +1267,12 @@
                     throw new Error(data.detail || data.message || 'Failed to redeem referral code.');
                 }
 
-                if (status) {
-                    status.style.display = 'block';
-                    status.className = 'credit-redeem-status success';
-                    status.textContent = data.message || `Referral code applied! You received +${data.reward || 10} credit points.`;
-                }
+                setCreditStatus(status, data.message || `Referral code applied! You received +${data.reward || 10} credit points.`, 'success');
 
                 input.value = '';
                 await loadCreditsData();
             } catch (err) {
-                if (status) {
-                    status.style.display = 'block';
-                    status.className = 'credit-redeem-status error';
-                    status.textContent = err.message;
-                }
+                setCreditStatus(status, err.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.textContent = oldText;
@@ -1671,7 +1687,7 @@
             if (window.pywebview && window.pywebview.api && window.pywebview.api.minimize) {
                 window.pywebview.api.minimize();
             } else {
-                alert("Tip: You can now safely minimize this window (or press Win+Down). Your phone companion is connected and will receive solutions directly!");
+                showStealthToast('You can minimize this window. Your phone companion is connected and will receive solutions directly.');
             }
         }
 
@@ -1745,13 +1761,13 @@
                     setResumeBadge(`Active (${msg.resume_filename || 'Resume'})`, msg.resume_filename);
                     const badge = document.getElementById('resume-status-badge');
                     if (badge) badge.style.color = '#10b981';
-                    document.getElementById('profile-resume-status').textContent = `Resume ready: ${msg.resume_filename || 'uploaded'}.`;
+                    setTransientMessage(document.getElementById('profile-resume-status'), `Resume ready: ${msg.resume_filename || 'uploaded'}.`);
                 } else {
                     updateDesktopResumeUI(false);
                     setResumeBadge('No Resume Uploaded', '');
                     const badge = document.getElementById('resume-status-badge');
                     if (badge) badge.style.color = 'var(--text-secondary)';
-                    document.getElementById('profile-resume-status').textContent = 'No resume uploaded.';
+                    setTransientMessage(document.getElementById('profile-resume-status'), 'No resume uploaded.');
                 }
                 ['background_opacity', 'font_opacity', 'response_font_size', 'show_screen_capture_button', 'screen_quality', 'neural_vad_enabled', 'vad_mode', 'google_search_enabled', 'custom_instructions', 'profile_name', 'profile_email', 'profile_phone'].forEach(key => {
                     if (typeof msg[key] !== 'undefined') {
@@ -1839,14 +1855,14 @@
                 statusBanner.style.background = 'rgba(0, 122, 255, 0.15)';
                 statusBanner.style.color = '#007aff';
                 statusBanner.style.borderColor = 'rgba(0, 122, 255, 0.35)';
-                setTimeout(() => { statusBanner.style.display = 'none'; }, 3000);
+                setTimeout(() => { statusBanner.style.display = 'none'; }, 5000);
             } else if (msg.type === 'resume_updated') {
                 statusBannerText.textContent = `Resume updated: ${msg.filename || 'Profile loaded'}`;
                 statusBanner.style.display = 'flex';
                 statusBanner.style.background = 'rgba(16, 185, 129, 0.15)';
                 statusBanner.style.color = '#10b981';
                 statusBanner.style.borderColor = 'rgba(16, 185, 129, 0.35)';
-                document.getElementById('profile-resume-status').textContent = `Resume ready: ${msg.filename || 'uploaded'}.`;
+                setTransientMessage(document.getElementById('profile-resume-status'), `Resume ready: ${msg.filename || 'uploaded'}.`);
                 updateDesktopResumeUI(true, msg.filename, msg.length);
                 const badge = document.getElementById('resume-status-badge');
                 if (badge) {
@@ -1854,19 +1870,19 @@
                     setResumeBadge(`Active (${filename} • ${msg.length} chars)`, filename);
                     badge.style.color = '#10b981';
                 }
-                setTimeout(() => { statusBanner.style.display = 'none'; }, 3500);
+                setTimeout(() => { statusBanner.style.display = 'none'; }, 5000);
             } else if (msg.type === 'resume_deleted') {
                 updateDesktopResumeUI(false);
                 setResumeBadge('No Resume Uploaded', '');
                 const badge = document.getElementById('resume-status-badge');
                 if (badge) badge.style.color = 'var(--text-secondary)';
-                document.getElementById('profile-resume-status').textContent = 'No resume uploaded.';
+                setTransientMessage(document.getElementById('profile-resume-status'), 'No resume uploaded.');
                 statusBannerText.textContent = 'Resume was removed.';
                 statusBanner.style.display = 'flex';
                 statusBanner.style.background = 'rgba(239, 68, 68, 0.15)';
                 statusBanner.style.color = '#f87171';
                 statusBanner.style.borderColor = 'rgba(239, 68, 68, 0.35)';
-                setTimeout(() => { statusBanner.style.display = 'none'; }, 3000);
+                setTimeout(() => { statusBanner.style.display = 'none'; }, 5000);
             } else if (msg.type === 'copilot_started') {
                 currentCopilotStartTime = msg.start_time;
                 const isFromMobile = (msg.source === 'mobile') || (isCompanionConnected && !isSessionTakenOverOnPC);
@@ -1897,7 +1913,6 @@
 
                 if (msg.reason === 'insufficient_credits') {
                     showStealthToast(`⚠️ ${msg.message || 'Call ended: Insufficient credits.'}`);
-                    alert(msg.message || 'Call automatically ended due to insufficient credits. Please recharge your credits to continue.');
                 }
 
                 // User requirement: Even when session ends on mobile, if mobile is still connected,
@@ -2153,7 +2168,7 @@
                 if (btnMic) btnMic.classList.remove('recording');
                 if (micLabel) micLabel.textContent = 'Hold to Speak';
                 resumeLoopback();
-                alert("Microphone access is not available. Please check the desktop app's microphone permissions.");
+                showStealthToast("Microphone access is not available. Please check the desktop app's microphone permissions.");
                 return;
             }
 
@@ -2411,11 +2426,11 @@
             const qrStatus = document.getElementById('qr-copy-status');
             try {
                 await navigator.clipboard.writeText(document.querySelector('.qr-link').dataset.mobileUrl);
-                status.textContent = 'Phone link copied! Open it on your phone, or scan the QR code.';
-                qrStatus.textContent = 'Copied to clipboard!';
+                setTransientMessage(status, 'Phone link copied! Open it on your phone, or scan the QR code.');
+                setTransientMessage(qrStatus, 'Copied to clipboard!');
             } catch (error) {
-                status.textContent = 'Could not copy automatically. Scan the QR code with your phone camera.';
-                qrStatus.textContent = 'Could not copy. Scan the QR code instead.';
+                setTransientMessage(status, 'Could not copy automatically. Scan the QR code with your phone camera.');
+                setTransientMessage(qrStatus, 'Could not copy. Scan the QR code instead.');
             }
         }
 
@@ -2423,7 +2438,7 @@
             const button = document.getElementById('overlay-button');
             const status = document.getElementById('action-status');
             if (button) button.disabled = true;
-            if (status) status.textContent = 'Starting detached native overlay...';
+            setTransientMessage(status, 'Starting detached native overlay...', { autoDismiss: false });
             try {
                 const response = await fetch('/api/desktop-overlay', {
                     method: 'POST',
@@ -2433,11 +2448,11 @@
                 if (!response.ok) {
                     throw new Error(result.detail || 'The overlay could not be started.');
                 }
-                if (status) status.textContent = result.already_running
+                setTransientMessage(status, result.already_running
                     ? 'The desktop overlay is already open.'
-                    : 'The detached native desktop overlay has been launched.';
+                    : 'The detached native desktop overlay has been launched.');
             } catch (error) {
-                if (status) status.textContent = error.message || 'The desktop overlay could not be started.';
+                setTransientMessage(status, error.message || 'The desktop overlay could not be started.');
             } finally {
                 if (button) button.disabled = false;
             }
@@ -2450,20 +2465,20 @@
             const badge = document.getElementById('resume-status-badge');
 
             if (!file.name.toLowerCase().endsWith('.pdf')) {
-                status.textContent = 'Upload a PDF resume only.';
-                document.getElementById('profile-resume-status').textContent = 'Upload a PDF resume only.';
+                setTransientMessage(status, 'Upload a PDF resume only.');
+                setTransientMessage(document.getElementById('profile-resume-status'), 'Upload a PDF resume only.');
                 input.value = '';
                 return;
             }
             if (file.size > 1024 * 1024) {
-                status.textContent = 'Resume file must be 1 MB or smaller.';
-                document.getElementById('profile-resume-status').textContent = 'Resume file must be 1 MB or smaller.';
+                setTransientMessage(status, 'Resume file must be 1 MB or smaller.');
+                setTransientMessage(document.getElementById('profile-resume-status'), 'Resume file must be 1 MB or smaller.');
                 input.value = '';
                 return;
             }
 
-            status.textContent = `Parsing ${file.name}...`;
-            document.getElementById('profile-resume-status').textContent = `Parsing ${file.name}...`;
+            setTransientMessage(status, `Parsing ${file.name}...`, { autoDismiss: false });
+            setTransientMessage(document.getElementById('profile-resume-status'), `Parsing ${file.name}...`, { autoDismiss: false });
             setResumeBadge(`Parsing ${file.name}...`, file.name);
             badge.style.color = '#007aff';
 
@@ -2480,8 +2495,8 @@
                 if (res.ok && data.success) {
                     setResumeBadge(`Active (${file.name} • ${data.length} chars)`, file.name);
                     badge.style.color = '#10b981';
-                    status.textContent = `Resume loaded: ${file.name} (${data.length} characters injected into AI context).`;
-                    document.getElementById('profile-resume-status').textContent = `Resume ready: ${file.name}.`;
+                    setTransientMessage(status, `Resume loaded: ${file.name} (${data.length} characters injected into AI context).`);
+                    setTransientMessage(document.getElementById('profile-resume-status'), `Resume ready: ${file.name}.`);
                     updateDesktopResumeUI(true, file.name, data.length);
                 } else {
                     throw new Error(data.detail || data.error || 'Failed to parse resume');
@@ -2489,8 +2504,8 @@
             } catch (err) {
                 setResumeBadge('Error parsing resume', file.name);
                 badge.style.color = '#ef4444';
-                status.textContent = `Upload failed: ${err.message}`;
-                document.getElementById('profile-resume-status').textContent = `Upload failed: ${err.message}`;
+                setTransientMessage(status, `Upload failed: ${err.message}`);
+                setTransientMessage(document.getElementById('profile-resume-status'), `Upload failed: ${err.message}`);
             }
         }
 
@@ -2507,14 +2522,14 @@
                     setResumeBadge('No Resume Uploaded', '');
                     const badge = document.getElementById('resume-status-badge');
                     if (badge) badge.style.color = 'var(--text-secondary)';
-                    document.getElementById('profile-resume-status').textContent = 'Resume removed. You can upload a fresh resume.';
+                    setTransientMessage(document.getElementById('profile-resume-status'), 'Resume removed. You can upload a fresh resume.');
                     const status = document.getElementById('action-status');
-                    if (status) status.textContent = 'Resume removed.';
+                    setTransientMessage(status, 'Resume removed.');
                 } else {
-                    alert(data.detail || data.error || 'Failed to delete resume.');
+                    showStealthToast(data.detail || data.error || 'Failed to delete resume.');
                 }
             } catch (err) {
-                alert('Error deleting resume: ' + err.message);
+                showStealthToast('Error deleting resume: ' + err.message);
             }
         }
 
@@ -2676,19 +2691,21 @@
             container.innerHTML = '';
             const pill = document.createElement('div');
             pill.className = 'toast-pill';
-            pill.innerHTML = `<span>${message}</span>`;
+            pill.textContent = message;
             container.appendChild(pill);
             setTimeout(() => {
                 if (pill.parentNode === container) {
                     container.removeChild(pill);
                 }
-            }, 2200);
+            }, 5000);
         }
 
         function toggleClickThrough() {
             if (window.pywebview && window.pywebview.api && window.pywebview.api.toggle_click_through) {
                 window.pywebview.api.toggle_click_through().then(isActive => {
-                    showStealthToast(isActive ? 'Click-Through: ON — Press Ctrl+M to disable (auto-off in 30s)' : 'Click-Through: Off (Normal clicks)');
+                    showStealthToast(isActive
+                        ? 'Click-through ON (stays visible). Ctrl+Alt+M disables; auto-off in 30s.'
+                        : 'Click-Through: Off (Normal clicks)');
                     const btns = document.querySelectorAll('.btn-click-through');
                     btns.forEach(b => b.classList.toggle('active', Boolean(isActive)));
                 }).catch(error => {
@@ -2720,7 +2737,7 @@
                 showStealthToast(`Glass Transparency: ${nextVal}%`);
             }
             // Hotkey Ctrl + M : Toggle click-through mode (from reference app!)
-            if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) {
+            if (e.ctrlKey && !e.altKey && (e.key === 'm' || e.key === 'M')) {
                 e.preventDefault();
                 toggleClickThrough();
             }

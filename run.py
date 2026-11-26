@@ -7,6 +7,11 @@ import threading
 import time
 import uvicorn
 from dotenv import load_dotenv
+from window_toggle_ipc import (
+    WindowToggleIpc,
+    send_disable_click_through_request,
+    send_toggle_request,
+)
 
 # Store application data under the Linux XDG data directory.
 _XDG_DATA = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
@@ -82,9 +87,16 @@ def _set_gtk_window_pass_through(native_window, enabled: bool, idle_add, timeout
             gdk_window = native_window.get_window()
             if gdk_window is None:
                 raise RuntimeError("The GTK window is not realized yet.")
-            gdk_window.set_pass_through(enabled)
-            if gdk_window.get_pass_through() != enabled:
-                raise RuntimeError("GTK did not apply the requested click-through state.")
+            windows = []
+            pending = [gdk_window]
+            while pending:
+                current = pending.pop()
+                windows.append(current)
+                pending.extend(current.get_children())
+            for window in windows:
+                window.set_pass_through(enabled)
+            if any(window.get_pass_through() != enabled for window in windows):
+                raise RuntimeError("GTK did not apply the requested click-through state to every window.")
         except Exception as exc:
             errors.append(exc)
         finally:
@@ -97,6 +109,21 @@ def _set_gtk_window_pass_through(native_window, enabled: bool, idle_add, timeout
         raise RuntimeError("Timed out while applying GTK click-through.")
     if errors:
         raise RuntimeError(f"Could not update GTK click-through: {errors[0]}") from errors[0]
+
+
+def _toggle_gtk_window_visibility(native_window, iconified_state, idle_add) -> None:
+    def toggle():
+        gdk_window = native_window.get_window()
+        is_minimized = bool(gdk_window and gdk_window.get_state() & iconified_state)
+        if native_window.get_visible() and not is_minimized:
+            native_window.hide()
+        else:
+            native_window.show()
+            native_window.deiconify()
+            native_window.present()
+        return False
+
+    idle_add(toggle)
 
 
 def _prepare_linux_gtk_environment() -> None:
@@ -209,6 +236,23 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
             if self._window:
                 self._window.minimize()
 
+        def toggle_visibility(self):
+            if not self._window or not self._window.native:
+                raise RuntimeError("The GTK desktop window is not available.")
+
+            import gi
+
+            gi.require_version("Gtk", "3.0")
+            gi.require_version("Gdk", "3.0")
+            from gi.repository import Gdk, GLib
+
+            _toggle_gtk_window_visibility(
+                self._window.native,
+                Gdk.WindowState.ICONIFIED,
+                GLib.idle_add,
+            )
+            return True
+
         def close(self):
             if self._click_through_timer:
                 self._click_through_timer.cancel()
@@ -273,6 +317,19 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
                 self._click_through_timer.daemon = True
                 self._click_through_timer.start()
             return self.click_through
+
+        def disable_click_through(self):
+            if not self.click_through:
+                return False
+            self.toggle_click_through()
+            if self._window:
+                try:
+                    self._window.evaluate_js(
+                        "document.querySelectorAll('.btn-click-through').forEach(b => b.classList.remove('active'));"
+                    )
+                except Exception as exc:
+                    print(f"Could not update click-through button state: {exc}")
+            return False
 
         def _auto_disable_click_through(self):
             """Safety: automatically disable click-through after timeout to prevent lockout."""
@@ -357,7 +414,15 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
 
     desktop_api = DesktopApi()
 
+    from core.state import hotkey_manager
+
+    hotkey_manager.on_toggle_visibility = desktop_api.toggle_visibility
+    hotkey_manager.on_disable_click_through = desktop_api.disable_click_through
+
+    toggle_ipc = None
+
     def on_gui_ready():
+        nonlocal toggle_ipc
         """Called safely once pywebview's native message loop has initialized."""
         try:
             if hasattr(desktop_api._window, 'events') and hasattr(desktop_api._window.events, 'loaded'):
@@ -365,6 +430,10 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
             elif hasattr(desktop_api._window, 'events') and hasattr(desktop_api._window.events, 'shown'):
                 desktop_api._window.events.shown.wait(timeout=10)
             time.sleep(0.3)
+            toggle_ipc = WindowToggleIpc(
+                desktop_api.toggle_visibility,
+                desktop_api.disable_click_through,
+            )
             print(f"✅ Desktop window ready: {app_title}")
         except Exception as e:
             print(f"Error in on_gui_ready: {e}")
@@ -386,8 +455,17 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
         )
         desktop_api._window = window
 
+        def keep_window_off_taskbar(window):
+            if not window.native:
+                raise RuntimeError("The GTK desktop window is not available before showing.")
+            window.native.set_skip_taskbar_hint(True)
+
+        window.events.before_show += keep_window_off_taskbar
+
         webview.start(on_gui_ready, gui="gtk")
     finally:
+        if toggle_ipc:
+            toggle_ipc.close()
         server.should_exit = True
         server_thread.join(timeout=10)
         if server_thread.is_alive():
@@ -430,7 +508,23 @@ def main():
         action="store_true",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--toggle-window",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--disable-click-through",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
+
+    if args.toggle_window and send_toggle_request():
+        return
+    if args.disable_click_through:
+        send_disable_click_through_request()
+        return
 
     if args.debug:
         os.environ["DEBUG_CONSOLE"] = "1"

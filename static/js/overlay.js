@@ -18,6 +18,21 @@
         const modeSelect = document.getElementById('mode-select');
         const manualInput = document.getElementById('manual-input');
         const footerMode = document.getElementById('footer-mode');
+        let transientStatusTimer = null;
+
+        function showTransientStatus(message, background, color, borderColor) {
+            clearTimeout(transientStatusTimer);
+            statusBannerText.textContent = message;
+            statusBanner.style.display = 'flex';
+            statusBanner.style.background = background;
+            statusBanner.style.color = color;
+            statusBanner.style.borderColor = borderColor;
+            transientStatusTimer = setTimeout(() => {
+                if (statusBannerText.textContent === message) {
+                    statusBanner.style.display = 'none';
+                }
+            }, 5000);
+        }
 
         // Window Controls (minimize, close, pass-through)
         function minimizeWindow() {
@@ -189,6 +204,7 @@
             } else if (msg.type === 'status' && msg.status === 'thinking') {
                 // Show thinking banner at top without erasing previous answers
                 clearTimeout(thinkingTimer);
+                clearTimeout(transientStatusTimer);
                 statusBannerText.textContent = msg.message || (msg.is_snip ? 'Analyzing Code Screen with Gemini...' : 'Generating response...');
                 statusBanner.style.display = 'flex';
                 statusBanner.style.background = 'rgba(16, 185, 129, 0.15)';
@@ -202,19 +218,13 @@
             } else if (msg.type === 'status' && msg.status === 'idle') {
                 // Brief toast, leave all answers intact
                 clearTimeout(thinkingTimer);
-                statusBannerText.textContent = 'Audio did not contain a complete question.';
-                statusBanner.style.background = 'rgba(148, 163, 184, 0.15)';
-                statusBanner.style.color = '#cbd5e1';
-                statusBanner.style.borderColor = 'rgba(148, 163, 184, 0.25)';
-                statusBanner.style.display = 'flex';
-                setTimeout(() => {
-                    statusBanner.style.display = 'none';
-                }, 3000);
+                showTransientStatus('Audio did not contain a complete question.', 'rgba(148, 163, 184, 0.15)', '#cbd5e1', 'rgba(148, 163, 184, 0.25)');
 
             } else if (msg.type === 'speech_interim') {
                 liveTranscript.textContent = msg.text;
             } else if (msg.type === 'new_answer') {
                 clearTimeout(thinkingTimer);
+                clearTimeout(transientStatusTimer);
                 statusBanner.style.display = 'none';
                 if (msg.data.success) {
                     renderAnswer(msg.data);
@@ -226,21 +236,12 @@
                 if (modeSelect) modeSelect.value = msg.mode;
                 if (footerMode) footerMode.textContent = formatModeName(msg.mode);
             } else if (msg.type === 'history_cleared') {
-                statusBannerText.textContent = 'Rolling conversation history cleared.';
-                statusBanner.style.display = 'flex';
-                statusBanner.style.background = 'rgba(0, 122, 255, 0.15)';
-                statusBanner.style.color = '#007aff';
-                statusBanner.style.borderColor = 'rgba(0, 122, 255, 0.35)';
-                setTimeout(() => { statusBanner.style.display = 'none'; }, 3000);
+                showTransientStatus('Rolling conversation history cleared.', 'rgba(0, 122, 255, 0.15)', '#007aff', 'rgba(0, 122, 255, 0.35)');
             } else if (msg.type === 'resume_updated') {
-                statusBannerText.textContent = `Resume updated: ${msg.filename || 'Profile loaded'}`;
-                statusBanner.style.display = 'flex';
-                statusBanner.style.background = 'rgba(16, 185, 129, 0.15)';
-                statusBanner.style.color = '#10b981';
-                statusBanner.style.borderColor = 'rgba(16, 185, 129, 0.35)';
-                setTimeout(() => { statusBanner.style.display = 'none'; }, 3500);
+                showTransientStatus(`Resume updated: ${msg.filename || 'Profile loaded'}`, 'rgba(16, 185, 129, 0.15)', '#10b981', 'rgba(16, 185, 129, 0.35)');
             } else if (msg.type === 'panic_clear') {
                 clearTimeout(thinkingTimer);
+                clearTimeout(transientStatusTimer);
                 clearOverlay();
             }
         }
@@ -452,7 +453,12 @@
                 if (btnMic) btnMic.classList.remove('recording');
                 if (micLabel) micLabel.textContent = '🎙️ Hold to Speak';
                 resumeLoopback();
-                alert("Microphone access is not available. Please check the desktop app's microphone permissions.");
+                showTransientStatus(
+                    "Microphone access is not available. Please check the desktop app's microphone permissions.",
+                    'rgba(239, 68, 68, 0.2)',
+                    '#ef4444',
+                    'rgba(239, 68, 68, 0.4)'
+                );
                 return;
             }
 

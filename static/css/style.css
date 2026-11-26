@@ -273,7 +273,7 @@ a,
     display: flex;
     align-items: center;
     gap: 7px;
-    animation: toast-anim 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: toast-anim 5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* 8. Common Components (Equalizer, Status Dot, Buttons, Inputs) */

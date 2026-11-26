@@ -132,7 +132,6 @@ function handleIncomingMessage(msg) {
             resetCopilotTimer();
             if (msg.reason === 'insufficient_credits') {
                 showErrorToast(msg.message || '⚠️ Call ended: Insufficient credits.');
-                alert(msg.message || 'Call ended: Insufficient credits. Please recharge your credits to continue.');
             }
             break;
 
@@ -915,26 +914,32 @@ function renderMobileTransactions(txList) {
     }).join('');
 }
 
+let mobileCreditRedeemStatusTimer = null;
+function setMobileCreditRedeemStatus(message, color, autoDismiss = true) {
+    const status = document.getElementById('mobile-credit-redeem-status');
+    if (!status) return;
+    clearTimeout(mobileCreditRedeemStatusTimer);
+    status.textContent = message;
+    status.style.color = color;
+    mobileCreditRedeemStatusTimer = autoDismiss && message ? setTimeout(() => {
+        status.textContent = '';
+        mobileCreditRedeemStatusTimer = null;
+    }, 5000) : null;
+}
+
 async function redeemMobileCreditCode() {
     const input = document.getElementById('mobile-credit-code-input');
-    const status = document.getElementById('mobile-credit-redeem-status');
     const btn = document.getElementById('btn-mobile-redeem');
     if (!input) return;
 
     const code = input.value.trim();
     if (!code) {
-        if (status) {
-            status.textContent = 'Please enter a 16-character credit code.';
-            status.style.color = '#ef4444';
-        }
+        setMobileCreditRedeemStatus('Please enter a 16-character credit code.', '#ef4444');
         return;
     }
 
     if (btn) btn.disabled = true;
-    if (status) {
-        status.textContent = 'Verifying code...';
-        status.style.color = '#38bdf8';
-    }
+    setMobileCreditRedeemStatus('Verifying code...', '#38bdf8', false);
 
     try {
         const res = await authFetch('/api/credits/redeem', {
@@ -944,24 +949,15 @@ async function redeemMobileCreditCode() {
         const data = await res.json();
         if (res.ok && data.success) {
             input.value = '';
-            if (status) {
-                status.textContent = `Success! Added +${data.credited} credits.`;
-                status.style.color = '#10b981';
-            }
+            setMobileCreditRedeemStatus(`Success! Added +${data.credited} credits.`, '#10b981');
             updateMobileCreditsDisplay(data.balance);
             showErrorToast(`Recharged +${data.credited} credit points!`);
             loadMobileCreditsData();
         } else {
-            if (status) {
-                status.textContent = data.detail || data.error || 'Invalid or expired code.';
-                status.style.color = '#ef4444';
-            }
+            setMobileCreditRedeemStatus(data.detail || data.error || 'Invalid or expired code.', '#ef4444');
         }
     } catch (err) {
-        if (status) {
-            status.textContent = 'Network error. Try again.';
-            status.style.color = '#ef4444';
-        }
+        setMobileCreditRedeemStatus('Network error. Try again.', '#ef4444');
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -1123,7 +1119,7 @@ function showErrorToast(msg) {
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => {
             toast.classList.remove('show');
-        }, 2600);
+        }, 5000);
     } else {
         console.log('[Toast]:', msg);
     }

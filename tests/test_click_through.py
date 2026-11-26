@@ -4,14 +4,18 @@ from run import _set_gtk_window_pass_through
 
 
 class FakeGdkWindow:
-    def __init__(self):
+    def __init__(self, children=None):
         self.pass_through = False
+        self.children = children or []
 
     def set_pass_through(self, enabled):
         self.pass_through = enabled
 
     def get_pass_through(self):
         return self.pass_through
+
+    def get_children(self):
+        return self.children
 
 
 class FakeGtkWindow:
@@ -24,7 +28,9 @@ class FakeGtkWindow:
 
 class GtkClickThroughTests(unittest.TestCase):
     def test_sets_and_clears_native_pass_through_on_gui_callback(self):
-        gdk_window = FakeGdkWindow()
+        nested_child = FakeGdkWindow()
+        child = FakeGdkWindow([nested_child])
+        gdk_window = FakeGdkWindow([child])
         gtk_window = FakeGtkWindow(gdk_window)
 
         def run_on_gui_thread(callback):
@@ -32,9 +38,13 @@ class GtkClickThroughTests(unittest.TestCase):
 
         _set_gtk_window_pass_through(gtk_window, True, run_on_gui_thread)
         self.assertTrue(gdk_window.get_pass_through())
+        self.assertTrue(child.get_pass_through())
+        self.assertTrue(nested_child.get_pass_through())
 
         _set_gtk_window_pass_through(gtk_window, False, run_on_gui_thread)
         self.assertFalse(gdk_window.get_pass_through())
+        self.assertFalse(child.get_pass_through())
+        self.assertFalse(nested_child.get_pass_through())
 
     def test_reports_unrealized_gtk_window(self):
         gtk_window = FakeGtkWindow(None)
