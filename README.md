@@ -33,6 +33,27 @@ Designed for Ubuntu and other Linux desktop distributions.
 
 ## ⚡ Quickstart Guide
 
+### Install on Ubuntu from a `.deb`
+
+Download the `ai-interview-copilot_0.1.0_all.deb` package shared by the project maintainer, then install it with:
+
+```bash
+sudo apt install ./ai-interview-copilot_0.1.0_all.deb
+```
+
+The package installs the app and launcher, installs Python packages from PyPI, and requires an internet connection
+during installation. On first launch, it creates `~/.config/ai-interview-copilot/.env`; add your Gemini and Groq API
+keys there. App data remains in your user account and is not removed when the package is uninstalled.
+
+To build the package from a source checkout:
+
+```bash
+bash packaging/build_deb.sh
+```
+
+The generated package is written to `dist/`. On GNOME Wayland, the global window shortcuts are registered the first
+time the app is launched.
+
 ### 1. Configure Your API Keys
 ```bash
 cp .env.example .env
@@ -45,9 +66,9 @@ cp .env.example .env
 ```bash
 sudo apt install -y \
     portaudio19-dev \
+    python3-venv \
     python3-gi python3-gi-cairo \
-    gir1.2-gtk-3.0 gir1.2-webkit2-4.0 \
-    libgirepository1.0-dev
+    gir1.2-gtk-3.0 gir1.2-webkit2-4.1
 ```
 
 **Fedora:**

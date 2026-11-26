@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+
+APP_DIR=/opt/ai-interview-copilot
+PYTHON="$APP_DIR/.venv/bin/python"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+CONFIG_DIR="$CONFIG_HOME/ai-interview-copilot"
+CONFIG_FILE="$CONFIG_DIR/.env"
+SHORTCUT_MARKER="$CONFIG_DIR/.shortcuts-installed"
+
+if [ ! -x "$PYTHON" ]; then
+    printf '%s\n' "AI Interview Copilot is not fully installed. Reinstall it with: sudo apt install --reinstall ai-interview-copilot" >&2
+    exit 1
+fi
+
+mkdir -p "$CONFIG_DIR"
+chmod 700 "$CONFIG_DIR"
+if [ ! -f "$CONFIG_FILE" ]; then
+    install -m 600 "$APP_DIR/.env.example" "$CONFIG_FILE"
+fi
+
+export APP_ENV_FILE="$CONFIG_FILE"
+cd "$APP_DIR"
+
+if [ ! -f "$SHORTCUT_MARKER" ]; then
+    "$PYTHON" "$APP_DIR/create_shortcut.py"
+    touch "$SHORTCUT_MARKER"
+fi
+
+exec "$PYTHON" "$APP_DIR/run.py" "$@"

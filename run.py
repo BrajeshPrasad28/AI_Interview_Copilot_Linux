@@ -48,7 +48,7 @@ def _global_exception_hook(exc_type, exc_val, exc_tb):
 sys.excepthook = _global_exception_hook
 
 # Load env
-load_dotenv()
+load_dotenv(dotenv_path=os.getenv("APP_ENV_FILE") or None)
 
 def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

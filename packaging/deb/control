@@ -1,0 +1,11 @@
+Package: ai-interview-copilot
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Brajesh Prasad <brajeshprasad28@users.noreply.github.com>
+Homepage: https://github.com/BrajeshPrasad28/AI_Interview_Copilot_Linux
+Depends: python3 (>= 3.10), python3-venv, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, build-essential, portaudio19-dev
+Description: Linux desktop AI interview copilot
+ Desktop app with a GTK/WebKit interface, audio processing, and a mobile companion.
+ Python dependencies are installed into a private virtual environment during setup.

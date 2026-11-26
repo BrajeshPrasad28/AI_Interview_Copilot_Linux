@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AI Interview Copilot
+Comment=Linux desktop AI interview copilot
+Exec=/usr/bin/ai-interview-copilot
+TryExec=/usr/bin/ai-interview-copilot
+Icon=ai-interview-copilot
+Terminal=false
+Categories=Utility;Education;
+StartupWMClass=AI Interview Copilot

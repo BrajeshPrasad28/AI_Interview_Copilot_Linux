@@ -20,6 +20,13 @@ _CUSTOM_BINDING_BASE = (
 _CUSTOM_BINDING_NAME = "AI Interview Copilot Window Toggle"
 
 
+def _is_packaged_install(run_py):
+    return (
+        os.path.realpath(run_py) == "/opt/ai-interview-copilot/run.py"
+        and os.path.isfile("/usr/bin/ai-interview-copilot")
+    )
+
+
 def _gsettings(*arguments):
     return subprocess.run(
         ["gsettings", *arguments],
@@ -53,20 +60,30 @@ def install_gnome_toggle_shortcut(python_executable, run_py):
             "<Control><Alt>m",
         ),
     )
+    packaged_install = _is_packaged_install(run_py)
+    command_prefix = (
+        shlex.quote("/usr/bin/ai-interview-copilot")
+        if packaged_install
+        else f"{shlex.quote(python_executable)} {shlex.quote(run_py)}"
+    )
     paths_changed = False
     for slug, name, argument, binding in bindings:
         candidate = _CUSTOM_BINDING_BASE + f"{slug}/"
         suffix = 2
+        command = f"{command_prefix} {argument}"
         while candidate in paths:
             schema = f"{_MEDIA_KEYS_SCHEMA}.custom-keybinding:{candidate}"
             existing_name = ast.literal_eval(_gsettings("get", schema, "name").stdout.strip())
             existing_command = ast.literal_eval(_gsettings("get", schema, "command").stdout.strip())
-            if existing_name == name and run_py in existing_command and argument in existing_command:
+            if (
+                existing_name == name
+                and isinstance(existing_command, str)
+                and argument in existing_command
+            ):
                 break
             candidate = _CUSTOM_BINDING_BASE + f"{slug}-{suffix}/"
             suffix += 1
 
-        command = f"{shlex.quote(python_executable)} {shlex.quote(run_py)} {argument}"
         custom_schema = f"{_MEDIA_KEYS_SCHEMA}.custom-keybinding:{candidate}"
         _gsettings("set", custom_schema, "name", name)
         _gsettings("set", custom_schema, "command", command)
@@ -91,13 +108,18 @@ def create_desktop_shortcut():
 
         run_py = os.path.join(project_dir, "run.py")
         icon_path = os.path.join(project_dir, "app_icon.png")  # Linux uses PNG; convert .ico if needed
+        launcher = (
+            "/usr/bin/ai-interview-copilot"
+            if _is_packaged_install(run_py)
+            else f"{shlex.quote(venv_python)} {shlex.quote(run_py)}"
+        )
 
         desktop_entry = f"""[Desktop Entry]
 Version=1.0
 Type=Application
 Name=AI Interview Copilot
 Comment=Realtime AI interview assistant with audio capture and screen vision
-Exec={venv_python} {run_py}
+Exec={launcher}
 Icon={icon_path}
 Terminal=false
 Categories=Utility;Education;
