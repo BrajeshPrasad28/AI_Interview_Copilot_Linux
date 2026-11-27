@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-VERSION="${1:-0.1.0}"
+VERSION="${1:-0.1.2}"
 
 if [[ ! "$VERSION" =~ ^[0-9][A-Za-z0-9.+:~-]*$ ]]; then
     printf 'Invalid Debian package version: %s\n' "$VERSION" >&2
@@ -49,6 +49,9 @@ install -m 644 "$SCRIPT_DIR/deb/ai-interview-copilot.desktop" \
 install -m 644 "$PROJECT_DIR/app_icon.png" \
     "$PACKAGE_ROOT/usr/share/icons/hicolor/256x256/apps/ai-interview-copilot.png"
 install -m 644 "$PROJECT_DIR/app_icon.png" "$APP_ROOT/app_icon.png"
+
+# Do not carry group/world write permissions from the source checkout into the system package.
+chmod -R go-w "$PACKAGE_ROOT"
 
 mkdir -p "$OUTPUT_DIR"
 dpkg-deb --build --root-owner-group "$PACKAGE_ROOT" "$OUTPUT"

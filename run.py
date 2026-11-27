@@ -3,6 +3,9 @@ import sys
 import socket
 import webbrowser
 import argparse
+import ctypes
+import ctypes.util
+import logging
 import threading
 import time
 import uvicorn
@@ -12,6 +15,8 @@ from window_toggle_ipc import (
     send_disable_click_through_request,
     send_toggle_request,
 )
+
+logger = logging.getLogger(__name__)
 
 # Store application data under the Linux XDG data directory.
 _XDG_DATA = os.getenv("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
@@ -111,16 +116,144 @@ def _set_gtk_window_pass_through(native_window, enabled: bool, idle_add, timeout
         raise RuntimeError(f"Could not update GTK click-through: {errors[0]}") from errors[0]
 
 
-def _toggle_gtk_window_visibility(native_window, iconified_state, idle_add) -> None:
+class _WindowVisibilityState:
+    def __init__(self) -> None:
+        self.hidden: bool = False
+
+
+def _send_x11_activation_request(window_id: int) -> bool:
+    library = ctypes.util.find_library("X11")
+    if not library:
+        logger.warning("Cannot activate Copilot window: libX11 was not found.")
+        return False
+
+    try:
+        x11 = ctypes.CDLL(library)
+    except OSError as exc:
+        logger.warning("Cannot load libX11 to activate Copilot window: %s", exc)
+        return False
+
+    Display = ctypes.c_void_p
+    Window = ctypes.c_ulong
+    Atom = ctypes.c_ulong
+
+    class ClientMessageData(ctypes.Union):
+        _fields_ = [
+            ("b", ctypes.c_char * 20),
+            ("s", ctypes.c_short * 10),
+            ("l", ctypes.c_long * 5),
+        ]
+
+    class ClientMessageEvent(ctypes.Structure):
+        _fields_ = [
+            ("type", ctypes.c_int),
+            ("serial", ctypes.c_ulong),
+            ("send_event", ctypes.c_int),
+            ("display", Display),
+            ("window", Window),
+            ("message_type", Atom),
+            ("format", ctypes.c_int),
+            ("data", ClientMessageData),
+        ]
+
+    class XEvent(ctypes.Union):
+        _fields_ = [
+            ("type", ctypes.c_int),
+            ("xclient", ClientMessageEvent),
+            ("pad", ctypes.c_long * 24),
+        ]
+
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XOpenDisplay.restype = Display
+    x11.XDefaultRootWindow.argtypes = [Display]
+    x11.XDefaultRootWindow.restype = Window
+    x11.XInternAtom.argtypes = [Display, ctypes.c_char_p, ctypes.c_int]
+    x11.XInternAtom.restype = Atom
+    x11.XSendEvent.argtypes = [
+        Display,
+        Window,
+        ctypes.c_int,
+        ctypes.c_long,
+        ctypes.POINTER(XEvent),
+    ]
+    x11.XSendEvent.restype = ctypes.c_int
+    x11.XFlush.argtypes = [Display]
+    x11.XCloseDisplay.argtypes = [Display]
+
+    display = x11.XOpenDisplay(None)
+    if not display:
+        logger.warning("Cannot connect to X11 to activate Copilot window.")
+        return False
+
+    try:
+        event = XEvent()
+        event.xclient.type = 33  # ClientMessage
+        event.xclient.send_event = 1
+        event.xclient.display = display
+        event.xclient.window = window_id
+        event.xclient.message_type = x11.XInternAtom(
+            display, b"_NET_ACTIVE_WINDOW", 0
+        )
+        event.xclient.format = 32
+        event.xclient.data.l[0] = 2  # EWMH pager-style activation request.
+        root = x11.XDefaultRootWindow(display)
+        sent = x11.XSendEvent(
+            display,
+            root,
+            0,
+            (1 << 19) | (1 << 20),
+            ctypes.byref(event),
+        )
+        x11.XFlush(display)
+        if not sent:
+            logger.warning("The X11 window manager rejected Copilot activation.")
+        return bool(sent)
+    finally:
+        x11.XCloseDisplay(display)
+
+
+def _activate_x11_window(native_window) -> bool:
+    gdk_window = native_window.get_window()
+    if not gdk_window:
+        return False
+
+    try:
+        import gi
+
+        gi.require_version("GdkX11", "3.0")
+        from gi.repository import GdkX11
+
+        window_id = GdkX11.X11Window.get_xid(gdk_window)
+    except (ImportError, TypeError, ValueError):
+        return False
+
+    return _send_x11_activation_request(window_id)
+
+
+def _toggle_gtk_window_visibility(
+    native_window,
+    iconified_state,
+    idle_add,
+    visibility_state,
+    activate_window=_activate_x11_window,
+) -> None:
     def toggle():
         gdk_window = native_window.get_window()
         is_minimized = bool(gdk_window and gdk_window.get_state() & iconified_state)
-        if native_window.get_visible() and not is_minimized:
-            native_window.hide()
-        else:
+        should_show = (
+            visibility_state.hidden
+            or not native_window.get_visible()
+            or is_minimized
+        )
+        if should_show:
             native_window.show()
             native_window.deiconify()
             native_window.present()
+            activate_window(native_window)
+            visibility_state.hidden = False
+        else:
+            native_window.hide()
+            visibility_state.hidden = True
         return False
 
     idle_add(toggle)
@@ -227,6 +360,7 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
     class DesktopApi:
         def __init__(self):
             self._window = None
+            self._visibility_state = _WindowVisibilityState()
             # Default alpha matching default background opacity (61% = ~155 alpha)
             self.current_alpha = 155
             self.click_through = False
@@ -250,6 +384,7 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
                 self._window.native,
                 Gdk.WindowState.ICONIFIED,
                 GLib.idle_add,
+                self._visibility_state,
             )
             return True
 

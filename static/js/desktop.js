@@ -1098,7 +1098,7 @@
             }
 
             if (!filtered || filtered.length === 0) {
-                list.innerHTML = `<p class="history-empty">No transaction history found for "${escapeHtml(filter)}".</p>`;
+                list.innerHTML = `<p class="history-empty">No transaction history found.</p>`;
                 return;
             }
 

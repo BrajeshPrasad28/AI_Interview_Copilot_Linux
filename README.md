@@ -35,10 +35,10 @@ Designed for Ubuntu and other Linux desktop distributions.
 
 ### Install on Ubuntu from a `.deb`
 
-Download the `ai-interview-copilot_0.1.0_all.deb` package shared by the project maintainer, then install it with:
+Download the `ai-interview-copilot_0.1.2_all.deb` package shared by the project maintainer, then install it with:
 
 ```bash
-sudo apt install ./ai-interview-copilot_0.1.0_all.deb
+sudo apt install ./ai-interview-copilot_0.1.2_all.deb
 ```
 
 The package installs the app and launcher, installs Python packages from PyPI, and requires an internet connection

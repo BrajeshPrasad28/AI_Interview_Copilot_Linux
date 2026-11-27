@@ -30,6 +30,17 @@ load_dotenv()
 
 logger = logging.getLogger("server")
 
+_DEFAULT_DASHBOARD_API_URL = "https://www.avintrax.in"
+
+
+def _get_dashboard_api_base_url(override: Optional[str] = None) -> str:
+    return (
+        override
+        or os.getenv("DASHBOARD_API_URL")
+        or _DEFAULT_DASHBOARD_API_URL
+    ).rstrip("/")
+
+
 BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -414,7 +425,7 @@ def redeem_credit_code(
             "error": f"Voucher code {formatted_code} has already been redeemed!"
         }
 
-    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    url = _get_dashboard_api_base_url(dashboard_url)
     endpoint = f"{url}/api/credits/redeem"
     payload = {
         "code": formatted_code,
@@ -504,7 +515,7 @@ def redeem_referral_code(
             "error": "You have already redeemed a referral code. Only one redemption is allowed per account/device."
         }
 
-    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    url = _get_dashboard_api_base_url(dashboard_url)
     endpoint = f"{url}/api/referrals/redeem"
     payload = {
         "code": cleaned,
@@ -572,7 +583,7 @@ def redeem_referral_code(
 
 def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any]:
     """Startup handshake with central dashboard: validates machine ID, gets rates, or falls back to offline grace mode."""
-    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    url = _get_dashboard_api_base_url(dashboard_url)
     endpoint = f"{url}/api/app/startup-check"
 
     machine_id = get_machine_id()
@@ -790,16 +801,14 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
 
 async def sync_user_profile_to_dashboard(dashboard_url: Optional[str] = None) -> bool:
     """Asynchronously sync candidate profile details to central dashboard database."""
-    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    url = _get_dashboard_api_base_url(dashboard_url)
     endpoint = f"{url}/api/user/sync"
     payload = {
         "uuid": get_user_uuid(),
         "machine_id": get_machine_id(),
         "name": current_state.get("profile_name", ""),
         "email": current_state.get("profile_email", ""),
-        "phone": current_state.get("profile_phone", ""),
-        "groq_api": ai_engine.groq_api_key if hasattr(ai_engine, "groq_api_key") else None,
-        "genai_api": ai_engine.api_key if hasattr(ai_engine, "api_key") else None
+        "phone": current_state.get("profile_phone", "")
     }
     headers = _get_dashboard_headers()
     try:
@@ -922,7 +931,7 @@ def set_terms_conditions(new_terms: Dict[str, Any], persist: bool = True) -> Dic
 
 def sync_terms_from_remote(dashboard_url: Optional[str] = None) -> Dict[str, Any]:
     """Fetch latest published Terms & Conditions directly from backend API."""
-    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    url = _get_dashboard_api_base_url(dashboard_url)
     endpoint = f"{url}/api/terms-conditions"
     try:
         import httpx
@@ -1018,7 +1027,7 @@ def set_contact_info(new_contact: Dict[str, Any], persist: bool = True) -> Dict[
 
 def sync_contact_from_remote(dashboard_url: Optional[str] = None) -> Dict[str, Any]:
     """Fetch latest contact information directly from backend API."""
-    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    url = _get_dashboard_api_base_url(dashboard_url)
     endpoint = f"{url}/api/contact"
     try:
         import httpx
@@ -1046,7 +1055,7 @@ def get_credits_balance() -> float:
 
 def sync_usage_balance_to_dashboard(transaction: Dict[str, Any], balance: float, dashboard_url: Optional[str] = None) -> bool:
     """Synchronize local deduction transaction and updated balance to central dashboard."""
-    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    url = _get_dashboard_api_base_url(dashboard_url)
     endpoint = f"{url}/api/user/sync-balance"
     payload = {
         "uuid": get_user_uuid(),
@@ -1071,7 +1080,7 @@ def lookup_and_restore_user_account(email: str, dashboard_url: Optional[str] = N
     if not cleaned_email:
         return {"success": False, "found": False, "error": "Email is required."}
 
-    url = (dashboard_url or os.getenv("DASHBOARD_API_URL", "http://localhost:5000")).rstrip("/")
+    url = _get_dashboard_api_base_url(dashboard_url)
     endpoint = f"{url}/api/user/restore"
     payload = {
         "email": cleaned_email,

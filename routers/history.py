@@ -53,7 +53,7 @@ async def api_start_session_history(request: Request):
     if current_balance < call_rate:
         raise HTTPException(
             status_code=402,
-            detail=f"Insufficient credit points to start Copilot session. ({current_balance:.2f} available, {call_rate:.2f} points required for 1 min call)."
+            detail="Insufficient credit points to start Copilot session"
         )
 
     session_history.start_session()
