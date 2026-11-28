@@ -626,6 +626,32 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
                 if rates and isinstance(rates, dict):
                     set_billing_rates(rates)
 
+                # If server returns a verified machine-bound user account, restore UUID and profile
+                server_user = data.get("user")
+                if isinstance(server_user, dict):
+                    srv_uuid = server_user.get("uuid")
+                    if srv_uuid and srv_uuid != user_uuid:
+                        global _cached_user_uuid
+                        _cached_user_uuid = srv_uuid
+                        prefs = load_app_preferences()
+                        prefs["user_uuid"] = srv_uuid
+                        if server_user.get("name") and server_user.get("name") != "New User":
+                            prefs["profile_name"] = server_user["name"]
+                            current_state["profile_name"] = server_user["name"]
+                        if server_user.get("email") and server_user.get("email") != "N/A":
+                            prefs["profile_email"] = server_user["email"]
+                            current_state["profile_email"] = server_user["email"]
+                        if server_user.get("phone"):
+                            prefs["profile_phone"] = server_user["phone"]
+                            current_state["profile_phone"] = server_user["phone"]
+                        save_app_preferences(prefs)
+                        logger.info(f"Machine-bound profile and UUID restored from dashboard: {srv_uuid}")
+                elif data.get("referral_code"):
+                    credits_data_early = load_app_credits()
+                    credits_data_early["referral_code"] = data["referral_code"]
+                    current_state["referral_code"] = data["referral_code"]
+                    save_app_credits(credits_data_early)
+
                 terms_data = data.get("terms")
                 if isinstance(terms_data, dict) and terms_data.get("content"):
                     set_terms_conditions(terms_data, persist=True)
