@@ -807,6 +807,22 @@ def sync_startup_handshake(dashboard_url: Optional[str] = None) -> Dict[str, Any
                         save_app_credits(credits_data)
                         logger.info(f"Merged {added_txns} remote transactions from dashboard into local ledger.")
 
+                # 4. Synchronize remote balance if dashboard has higher balance (e.g. earned referral reward while offline)
+                remote_balance = data.get("current_balance")
+                if remote_balance is None and isinstance(data.get("user"), dict):
+                    remote_balance = data["user"].get("current_balance")
+                if remote_balance is not None:
+                    try:
+                        rem_bal = float(remote_balance)
+                        credits_data = load_app_credits()
+                        loc_bal = float(credits_data.get("balance", 0.0) or 0.0)
+                        if rem_bal > loc_bal:
+                            credits_data["balance"] = rem_bal
+                            save_app_credits(credits_data)
+                            logger.info(f"Synced updated balance from Central Dashboard: {rem_bal} pts (was {loc_bal} pts)")
+                    except (ValueError, TypeError):
+                        pass
+
                 return {
                     "success": True,
                     "status": "success",
