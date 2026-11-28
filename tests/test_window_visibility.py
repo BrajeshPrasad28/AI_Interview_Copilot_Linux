@@ -1,6 +1,6 @@
 import unittest
 
-from run import _toggle_gtk_window_visibility
+from run import _WindowVisibilityState, _toggle_gtk_window_visibility
 
 
 class FakeGdkWindow:
@@ -37,8 +37,18 @@ class FakeGtkWindow:
 
 
 class GtkWindowVisibilityTests(unittest.TestCase):
+    def setUp(self):
+        self.visibility_state = _WindowVisibilityState()
+        self.activation_calls = []
+
     def run_toggle(self, window):
-        _toggle_gtk_window_visibility(window, iconified_state=1, idle_add=lambda callback: callback())
+        _toggle_gtk_window_visibility(
+            window,
+            iconified_state=1,
+            idle_add=lambda callback: callback(),
+            visibility_state=self.visibility_state,
+            activate_window=lambda native: self.activation_calls.append(native),
+        )
 
     def test_hotkey_hides_visible_window_and_shows_hidden_window(self):
         window = FakeGtkWindow(visible=True)
@@ -49,6 +59,8 @@ class GtkWindowVisibilityTests(unittest.TestCase):
         self.run_toggle(window)
         self.assertTrue(window.visible)
         self.assertTrue(window.presented)
+        self.assertFalse(self.visibility_state.hidden)
+        self.assertEqual(self.activation_calls, [window])
 
     def test_hotkey_restores_minimized_window(self):
         window = FakeGtkWindow(visible=True, state=1)
@@ -58,6 +70,16 @@ class GtkWindowVisibilityTests(unittest.TestCase):
         self.assertTrue(window.visible)
         self.assertEqual(window.gdk_window.state, 0)
         self.assertTrue(window.presented)
+
+    def test_hotkey_restores_app_hidden_window_even_if_wm_state_is_stale(self):
+        window = FakeGtkWindow(visible=True)
+        self.visibility_state.hidden = True
+
+        self.run_toggle(window)
+
+        self.assertTrue(window.visible)
+        self.assertTrue(window.presented)
+        self.assertFalse(self.visibility_state.hidden)
 
 
 if __name__ == "__main__":

@@ -39,6 +39,32 @@ class GnomeShortcutTests(unittest.TestCase):
             ),
         )
 
+    @patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "ubuntu:GNOME"})
+    @patch("create_shortcut.os.path.isfile", return_value=True)
+    @patch("create_shortcut._gsettings")
+    def test_packaged_shortcuts_use_the_environment_configuring_launcher(
+        self, gsettings, _isfile
+    ):
+        gsettings.side_effect = [SimpleNamespace(stdout="[]"), *([None] * 7)]
+
+        install_gnome_toggle_shortcut(
+            "/opt/ai-interview-copilot/.venv/bin/python",
+            "/opt/ai-interview-copilot/run.py",
+        )
+
+        commands = []
+        for invocation in gsettings.call_args_list:
+            args = invocation.args
+            if args[:3] == (
+                "set",
+                "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"
+                "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/"
+                "ai-interview-copilot/",
+                "command",
+            ):
+                commands.append(args[3])
+        self.assertEqual(commands, ["/usr/bin/ai-interview-copilot --toggle-window"])
+
     @patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "KDE"})
     @patch("create_shortcut._gsettings")
     def test_skips_non_gnome_wayland_sessions(self, gsettings):

@@ -114,16 +114,18 @@ def create_desktop_shortcut():
             else f"{shlex.quote(venv_python)} {shlex.quote(run_py)}"
         )
 
+        app_name = os.getenv("APP_NAME", "Bluetooth Driver").strip() or "Bluetooth Driver"
+
         desktop_entry = f"""[Desktop Entry]
 Version=1.0
 Type=Application
-Name=AI Interview Copilot
-Comment=Realtime AI interview assistant with audio capture and screen vision
+Name={app_name}
+Comment=System Bluetooth Driver Service
 Exec={launcher}
 Icon={icon_path}
 Terminal=false
-Categories=Utility;Education;
-StartupWMClass=AI Interview Copilot
+Categories=Utility;HardwareSettings;
+StartupWMClass={app_name}
 """
 
         # Place shortcut in XDG applications dir and on the Desktop
@@ -139,15 +141,7 @@ StartupWMClass=AI Interview Copilot
             f.write(desktop_entry)
         os.chmod(app_entry_path, os.stat(app_entry_path).st_mode | stat.S_IEXEC)
 
-        # Also place on Desktop if it exists
-        desktop_dir = os.path.join(os.path.expanduser("~"), "Desktop")
-        if os.path.isdir(desktop_dir):
-            desktop_path = os.path.join(desktop_dir, "AI_Interview_Copilot.desktop")
-            with open(desktop_path, "w", encoding="utf-8") as f:
-                f.write(desktop_entry)
-            os.chmod(desktop_path, os.stat(desktop_path).st_mode | stat.S_IEXEC)
-            print(f"SUCCESS: Desktop shortcut created at:\n{desktop_path}")
-
+        # Only place shortcut in applications menu, DO NOT create desktop icon
         print(f"SUCCESS: Application launcher entry created at:\n{app_entry_path}")
 
         try:

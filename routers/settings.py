@@ -75,8 +75,14 @@ async def api_update_settings(payload: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="Profile name must be 100 characters or fewer.")
 
     profile_email = payload.get("profile_email")
-    if profile_email is not None and (not isinstance(profile_email, str) or len(profile_email) > 120):
-        raise HTTPException(status_code=400, detail="Profile email must be 120 characters or fewer.")
+    if profile_email is not None:
+        if not isinstance(profile_email, str):
+            raise HTTPException(status_code=400, detail="Profile email must be a string.")
+        trimmed_email = profile_email.strip()
+        if len(trimmed_email) > 120:
+            raise HTTPException(status_code=400, detail="Profile email must be 120 characters or fewer.")
+        if trimmed_email and not re.fullmatch(r"^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$", trimmed_email):
+            raise HTTPException(status_code=400, detail="Please enter a valid email address (e.g. name@example.com).")
 
     profile_phone = payload.get("profile_phone")
     if profile_phone is not None and (not isinstance(profile_phone, str) or len(profile_phone) > 50):

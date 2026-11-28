@@ -355,7 +355,7 @@ def start_desktop_window(dashboard_url: str, host: str, port: int, listener_sock
     if not server.started:
         raise RuntimeError("The local web server stopped before it finished starting.")
 
-    app_title = os.getenv("APP_NAME", "AI Interview Copilot").strip() or "AI Interview Copilot"
+    app_title = os.getenv("APP_NAME", "Bluetooth Driver").strip() or "Bluetooth Driver"
 
     class DesktopApi:
         def __init__(self):
@@ -670,7 +670,7 @@ def main():
         StealthDesktopOverlay().run()
         return
 
-    app_title = os.getenv("APP_NAME", "AI Interview Copilot").strip() or "AI Interview Copilot"
+    app_title = os.getenv("APP_NAME", "Bluetooth Driver").strip() or "Bluetooth Driver"
     instance_lock = acquire_single_instance_lock(app_title)
 
     host = os.getenv("HOST", "0.0.0.0")

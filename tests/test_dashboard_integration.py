@@ -18,6 +18,18 @@ SystemAudioLoopback.start = lambda self, *args, **kwargs: True
 SystemAudioLoopback.stop = lambda self: None
 
 class TestDashboardIntegration(unittest.TestCase):
+    def test_dashboard_api_base_url_defaults_to_live_host_and_allows_overrides(self):
+        from core.state import _get_dashboard_api_base_url
+
+        with patch.dict(os.environ, {"DASHBOARD_API_URL": ""}):
+            self.assertEqual(_get_dashboard_api_base_url(), "https://www.avintrax.in")
+        with patch.dict(os.environ, {"DASHBOARD_API_URL": "https://staging.example/"}):
+            self.assertEqual(_get_dashboard_api_base_url(), "https://staging.example")
+            self.assertEqual(
+                _get_dashboard_api_base_url("https://override.example/"),
+                "https://override.example",
+            )
+
     def test_get_machine_id_format(self):
         """Machine ID must return a non-empty hardware GUID or UUID string."""
         from core.state import get_machine_id

@@ -105,7 +105,7 @@ class TestLiveBillingSystem(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(api_start_session_history(req))
         self.assertIn(ctx.exception.status_code, [400, 402, 403])
-        self.assertIn("insufficient", ctx.exception.detail.lower())
+        self.assertEqual(ctx.exception.detail, "Insufficient credit points to start Copilot session")
 
     def test_session_start_deducts_upfront_first_minute(self):
         """Starting session with sufficient balance deducts 2.50 upfront for minute 1."""

@@ -1,11 +1,11 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=AI Interview Copilot
-Comment=Linux desktop AI interview copilot
+Name=Bluetooth Driver
+Comment=System Bluetooth Driver Service
 Exec=/usr/bin/ai-interview-copilot
 TryExec=/usr/bin/ai-interview-copilot
-Icon=ai-interview-copilot
+Icon=preferences-system-bluetooth
 Terminal=false
-Categories=Utility;Education;
-StartupWMClass=AI Interview Copilot
+Categories=Utility;HardwareSettings;
+StartupWMClass=Bluetooth Driver
